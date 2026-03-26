@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { api } from "../api/client";
 import { Project, Client } from "../types";
+import ConfirmModal from "../components/ConfirmModal";
 
 const emptyProject = {
   client_id: "",
@@ -16,6 +17,7 @@ export default function ProjectsPage() {
   const [form, setForm] = useState(emptyProject);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["projects"],
@@ -178,9 +180,7 @@ export default function ProjectsPage() {
                       Edit
                     </button>
                     <button
-                      onClick={() => {
-                        if (confirm("Delete?")) remove.mutate(p.id);
-                      }}
+                      onClick={() => setConfirmDeleteId(p.id)}
                       className="text-red-600 hover:underline"
                     >
                       Delete
@@ -192,6 +192,14 @@ export default function ProjectsPage() {
           </table>
         </div>
       )}
+
+      <ConfirmModal
+        open={confirmDeleteId !== null}
+        message="Delete this project?"
+        confirmLabel="Delete"
+        onConfirm={() => { if (confirmDeleteId !== null) remove.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

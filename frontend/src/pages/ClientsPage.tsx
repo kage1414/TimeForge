@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import { Client } from '../types';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function ClientsPage() {
   const qc = useQueryClient();
@@ -12,6 +13,7 @@ export default function ClientsPage() {
   });
 
   const [editing, setEditing] = useState<Partial<Client> | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const save = useMutation({
     mutationFn: (c: Partial<Client>) =>
@@ -86,7 +88,7 @@ export default function ClientsPage() {
                 <td className="px-4 py-3">{c.phone}</td>
                 <td className="px-4 py-3">
                   <button onClick={() => setEditing(c)} className="text-indigo-600 hover:underline mr-3">Edit</button>
-                  <button onClick={() => { if (confirm('Delete this client?')) remove.mutate(c.id); }}
+                  <button onClick={() => setConfirmDeleteId(c.id)}
                     className="text-red-600 hover:underline">Delete</button>
                 </td>
               </tr>
@@ -97,6 +99,14 @@ export default function ClientsPage() {
           </tbody>
         </table>
       </div>
+
+      <ConfirmModal
+        open={confirmDeleteId !== null}
+        message="Delete this client?"
+        confirmLabel="Delete"
+        onConfirm={() => { if (confirmDeleteId !== null) remove.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

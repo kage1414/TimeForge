@@ -46,7 +46,7 @@ async function getNextInvoiceNumber(): Promise<string> {
 }
 
 router.post('/', async (req: Request, res: Response) => {
-  const { client_id, issue_date, due_date, tax_rate, notes, line_items, time_entry_ids, credit_ids, apply_credits } = req.body;
+  const { client_id, issue_date, due_date, tax_rate, notes, line_items, time_entry_ids, credit_ids, credit_time_entry_ids, apply_credits } = req.body;
 
   const invoice_number = await getNextInvoiceNumber();
 
@@ -99,6 +99,27 @@ router.post('/', async (req: Request, res: Response) => {
       });
       await db('time_entries').where('id', entry.id).update({ invoice_id: invoice.id });
       subtotal += amount;
+    }
+  }
+
+  // Create credits from billed time entries
+  if (credit_time_entry_ids?.length) {
+    const creditEntries = await db('time_entries')
+      .join('projects', 'time_entries.project_id', 'projects.id')
+      .select('time_entries.*', 'projects.default_rate', 'projects.name as project_name')
+      .whereIn('time_entries.id', credit_time_entry_ids);
+
+    for (const entry of creditEntries) {
+      const rate = entry.rate_override ?? entry.default_rate;
+      const hours = (entry.duration_minutes || 0) / 60;
+      const amount = parseFloat((hours * rate).toFixed(2));
+      await db('credits').insert({
+        client_id,
+        amount,
+        remaining_amount: amount,
+        description: `Credit for: ${entry.project_name} - ${entry.description || 'Time entry'}`,
+        source_invoice_id: entry.invoice_id,
+      });
     }
   }
 

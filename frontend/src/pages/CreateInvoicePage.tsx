@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import { Client, TimeEntry, Credit } from '../types';
+
+type EntryAction = 'bill' | 'credit';
 
 export default function CreateInvoicePage() {
   const navigate = useNavigate();
@@ -12,7 +14,10 @@ export default function CreateInvoicePage() {
   const [taxRate, setTaxRate] = useState('0');
   const [notes, setNotes] = useState('');
   const [dueInDays, setDueInDays] = useState('30');
-  const [selectedEntries, setSelectedEntries] = useState<Set<number>>(new Set());
+  // Unbilled entries: map of id -> action (bill or credit)
+  const [entryActions, setEntryActions] = useState<Map<number, EntryAction>>(new Map());
+  // Billed entries selected as credit
+  const [billedCredits, setBilledCredits] = useState<Set<number>>(new Set());
   const [selectedCredits, setSelectedCredits] = useState<Set<number>>(new Set());
 
   const { data: clients = [] } = useQuery<Client[]>({
@@ -23,6 +28,12 @@ export default function CreateInvoicePage() {
   const { data: unbilledEntries = [] } = useQuery<TimeEntry[]>({
     queryKey: ['unbilledEntries', clientId],
     queryFn: () => api.get(`/time-entries?unbilled=true&client_id=${clientId}`),
+    enabled: !!clientId,
+  });
+
+  const { data: billedEntries = [] } = useQuery<TimeEntry[]>({
+    queryKey: ['billedEntries', clientId],
+    queryFn: () => api.get(`/time-entries?billed=true&client_id=${clientId}`),
     enabled: !!clientId,
   });
 
@@ -38,13 +49,21 @@ export default function CreateInvoicePage() {
       const due = new Date(today);
       due.setDate(due.getDate() + Number(dueInDays));
 
+      const billIds: number[] = [];
+      const creditUnbilledIds: number[] = [];
+      entryActions.forEach((action, id) => {
+        if (action === 'bill') billIds.push(id);
+        else creditUnbilledIds.push(id);
+      });
+
       return api.post<{ id: number }>('/invoices', {
         client_id: Number(clientId),
         issue_date: today.toISOString().split('T')[0],
         due_date: due.toISOString().split('T')[0],
         tax_rate: Number(taxRate),
         notes,
-        time_entry_ids: Array.from(selectedEntries),
+        time_entry_ids: billIds,
+        credit_time_entry_ids: [...creditUnbilledIds, ...Array.from(billedCredits)],
         credit_ids: Array.from(selectedCredits),
       });
     },
@@ -58,10 +77,36 @@ export default function CreateInvoicePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  function toggleEntry(id: number) {
-    const next = new Set(selectedEntries);
+  function setEntryAction(id: number, action: EntryAction) {
+    const next = new Map(entryActions);
+    next.set(id, action);
+    setEntryActions(next);
+  }
+
+  function removeEntryAction(id: number) {
+    const next = new Map(entryActions);
+    next.delete(id);
+    setEntryActions(next);
+  }
+
+  function toggleEntryAction(id: number, action: EntryAction) {
+    if (entryActions.get(id) === action) {
+      removeEntryAction(id);
+    } else {
+      setEntryAction(id, action);
+    }
+  }
+
+  function selectAllBill() {
+    const next = new Map(entryActions);
+    unbilledEntries.forEach((e) => next.set(e.id, 'bill'));
+    setEntryActions(next);
+  }
+
+  function toggleBilledCredit(id: number) {
+    const next = new Set(billedCredits);
     next.has(id) ? next.delete(id) : next.add(id);
-    setSelectedEntries(next);
+    setBilledCredits(next);
   }
 
   function toggleCredit(id: number) {
@@ -70,27 +115,44 @@ export default function CreateInvoicePage() {
     setSelectedCredits(next);
   }
 
-  function selectAll() {
-    setSelectedEntries(new Set(unbilledEntries.map((e) => e.id)));
+  function resetSelections() {
+    setEntryActions(new Map());
+    setBilledCredits(new Set());
+    setSelectedCredits(new Set());
   }
 
-  const selectedAmount = unbilledEntries
-    .filter((e) => selectedEntries.has(e.id))
-    .reduce((sum, e) => {
-      const rate = e.rate_override ?? e.default_rate;
-      return sum + (e.duration_minutes / 60) * Number(rate);
-    }, 0);
+  function entryAmount(e: TimeEntry): number {
+    const rate = e.rate_override ?? e.default_rate;
+    return (e.duration_minutes / 60) * Number(rate);
+  }
 
-  const creditAmount = availableCredits
+  // Calculate totals
+  const billAmount = unbilledEntries
+    .filter((e) => entryActions.get(e.id) === 'bill')
+    .reduce((sum, e) => sum + entryAmount(e), 0);
+
+  const unbilledCreditAmount = unbilledEntries
+    .filter((e) => entryActions.get(e.id) === 'credit')
+    .reduce((sum, e) => sum + entryAmount(e), 0);
+
+  const billedCreditAmount = billedEntries
+    .filter((e) => billedCredits.has(e.id))
+    .reduce((sum, e) => sum + entryAmount(e), 0);
+
+  const existingCreditAmount = availableCredits
     .filter((c) => selectedCredits.has(c.id))
     .reduce((sum, c) => sum + Number(c.remaining_amount), 0);
 
-  const tax = selectedAmount * (Number(taxRate) / 100);
-  const total = Math.max(0, selectedAmount + tax - creditAmount);
+  const totalCreditAmount = unbilledCreditAmount + billedCreditAmount + existingCreditAmount;
+  const tax = billAmount * (Number(taxRate) / 100);
+  const total = Math.max(0, billAmount + tax - totalCreditAmount);
+
+  const hasSelections = entryActions.size > 0 || billedCredits.size > 0 || selectedCredits.size > 0;
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Create Invoice</h1>
+      <Link to="/invoices" className="text-indigo-600 hover:underline text-sm">&larr; Back to Invoices</Link>
+      <h1 className="text-2xl font-bold mb-6 mt-1">Create Invoice</h1>
 
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -99,7 +161,7 @@ export default function CreateInvoicePage() {
             <select
               className="border rounded p-2 w-full"
               value={clientId}
-              onChange={(e) => { setClientId(e.target.value); setSelectedEntries(new Set()); setSelectedCredits(new Set()); }}
+              onChange={(e) => { setClientId(e.target.value); resetSelections(); }}
             >
               <option value="">Select Client</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -122,17 +184,78 @@ export default function CreateInvoicePage() {
 
       {clientId && (
         <>
-          {/* Time Entries Selection */}
+          {/* Unbilled Time Entries */}
           <div className="bg-white rounded-lg shadow p-4 mb-6">
             <div className="flex justify-between items-center mb-3">
               <h2 className="font-semibold">Unbilled Time Entries</h2>
               {unbilledEntries.length > 0 && (
-                <button onClick={selectAll} className="text-indigo-600 text-sm hover:underline">Select All</button>
+                <button onClick={selectAllBill} className="text-indigo-600 text-sm hover:underline">Bill All</button>
               )}
             </div>
             {unbilledEntries.length === 0 ? (
               <p className="text-gray-500 text-sm">No unbilled time entries for this client.</p>
             ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b">
+                    <th className="pb-2">Project</th>
+                    <th className="pb-2">Description</th>
+                    <th className="pb-2">Date</th>
+                    <th className="pb-2 text-right">Hours</th>
+                    <th className="pb-2 text-right">Rate</th>
+                    <th className="pb-2 text-right">Amount</th>
+                    <th className="pb-2 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unbilledEntries.map((e) => {
+                    const rate = e.rate_override ?? e.default_rate;
+                    const hours = e.duration_minutes / 60;
+                    const amount = hours * Number(rate);
+                    const action = entryActions.get(e.id);
+                    return (
+                      <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50">
+                        <td className="py-2">{e.project_name}</td>
+                        <td className="py-2">{e.description || '-'}</td>
+                        <td className="py-2">{new Date(e.start_time).toLocaleDateString()}</td>
+                        <td className="py-2 text-right">{hours.toFixed(2)}</td>
+                        <td className="py-2 text-right">${Number(rate).toFixed(2)}</td>
+                        <td className="py-2 text-right">${amount.toFixed(2)}</td>
+                        <td className="py-2 text-center space-x-1">
+                          <button
+                            onClick={() => toggleEntryAction(e.id, 'bill')}
+                            className={`px-2 py-1 rounded text-xs font-medium border ${
+                              action === 'bill'
+                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
+                            }`}
+                          >
+                            Bill
+                          </button>
+                          <button
+                            onClick={() => toggleEntryAction(e.id, 'credit')}
+                            className={`px-2 py-1 rounded text-xs font-medium border ${
+                              action === 'credit'
+                                ? 'bg-green-600 text-white border-green-600'
+                                : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'
+                            }`}
+                          >
+                            Credit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Billed Time Entries (for crediting) */}
+          {billedEntries.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-4 mb-6">
+              <h2 className="font-semibold mb-3">Billed Time Entries (Credit)</h2>
+              <p className="text-gray-500 text-xs mb-3">Select previously billed entries to create credits applied to this invoice.</p>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500 border-b">
@@ -146,14 +269,14 @@ export default function CreateInvoicePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {unbilledEntries.map((e) => {
+                  {billedEntries.map((e) => {
                     const rate = e.rate_override ?? e.default_rate;
                     const hours = e.duration_minutes / 60;
                     const amount = hours * Number(rate);
                     return (
-                      <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => toggleEntry(e.id)}>
+                      <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => toggleBilledCredit(e.id)}>
                         <td className="py-2">
-                          <input type="checkbox" checked={selectedEntries.has(e.id)} onChange={() => toggleEntry(e.id)} />
+                          <input type="checkbox" checked={billedCredits.has(e.id)} onChange={() => toggleBilledCredit(e.id)} />
                         </td>
                         <td className="py-2">{e.project_name}</td>
                         <td className="py-2">{e.description || '-'}</td>
@@ -166,10 +289,10 @@ export default function CreateInvoicePage() {
                   })}
                 </tbody>
               </table>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Credits Selection */}
+          {/* Existing Credits */}
           {availableCredits.length > 0 && (
             <div className="bg-white rounded-lg shadow p-4 mb-6">
               <h2 className="font-semibold mb-3">Available Credits</h2>
@@ -201,8 +324,8 @@ export default function CreateInvoicePage() {
             <h2 className="font-semibold mb-3">Summary</h2>
             <div className="text-sm space-y-1">
               <div className="flex justify-between">
-                <span>Subtotal ({selectedEntries.size} entries)</span>
-                <span>${selectedAmount.toFixed(2)}</span>
+                <span>Subtotal ({Array.from(entryActions.values()).filter((a) => a === 'bill').length} entries)</span>
+                <span>${billAmount.toFixed(2)}</span>
               </div>
               {Number(taxRate) > 0 && (
                 <div className="flex justify-between">
@@ -210,10 +333,10 @@ export default function CreateInvoicePage() {
                   <span>${tax.toFixed(2)}</span>
                 </div>
               )}
-              {creditAmount > 0 && (
+              {totalCreditAmount > 0 && (
                 <div className="flex justify-between text-green-600">
                   <span>Credits</span>
-                  <span>-${creditAmount.toFixed(2)}</span>
+                  <span>-${totalCreditAmount.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between font-bold text-lg border-t pt-2 mt-2">
@@ -225,7 +348,7 @@ export default function CreateInvoicePage() {
 
           <button
             onClick={() => createInvoice.mutate()}
-            disabled={selectedEntries.size === 0}
+            disabled={!hasSelections}
             className="bg-indigo-600 text-white px-6 py-3 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Create Invoice

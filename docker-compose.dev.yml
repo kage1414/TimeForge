@@ -22,6 +22,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/invoicer
       PORT: "4000"
+      CHOKIDAR_USEPOLLING: "true"
     ports:
       - "4000:4000"
     volumes:

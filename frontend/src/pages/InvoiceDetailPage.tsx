@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import { Invoice } from '../types';
+import ConfirmModal from '../components/ConfirmModal';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-800',
@@ -24,6 +26,7 @@ export default function InvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: invoice, isLoading } = useQuery<Invoice>({
     queryKey: ['invoice', id],
@@ -49,6 +52,105 @@ export default function InvoiceDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  function exportPdf() {
+    if (!invoice) return;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    const lineRows = (invoice.line_items || []).map((li) =>
+      `<tr>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${li.description}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${Number(li.quantity).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">$${Number(li.rate).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">$${Number(li.amount).toFixed(2)}</td>
+      </tr>`
+    ).join('');
+
+    let totalsHtml = `
+      <tr><td colspan="3" style="padding:8px;text-align:right;color:#6b7280">Subtotal</td>
+        <td style="padding:8px;text-align:right">$${Number(invoice.subtotal).toFixed(2)}</td></tr>`;
+    if (Number(invoice.tax_rate) > 0) {
+      totalsHtml += `<tr><td colspan="3" style="padding:8px;text-align:right;color:#6b7280">Tax (${Number(invoice.tax_rate)}%)</td>
+        <td style="padding:8px;text-align:right">$${Number(invoice.tax_amount).toFixed(2)}</td></tr>`;
+    }
+    if (Number(invoice.credits_applied) > 0) {
+      totalsHtml += `<tr><td colspan="3" style="padding:8px;text-align:right;color:#16a34a">Credits Applied</td>
+        <td style="padding:8px;text-align:right;color:#16a34a">-$${Number(invoice.credits_applied).toFixed(2)}</td></tr>`;
+    }
+    totalsHtml += `<tr style="border-top:2px solid #111"><td colspan="3" style="padding:8px;text-align:right;font-weight:bold;font-size:1.1em">Total</td>
+      <td style="padding:8px;text-align:right;font-weight:bold;font-size:1.1em">$${Number(invoice.total).toFixed(2)}</td></tr>`;
+
+    w.document.write(`<!DOCTYPE html><html><head><title>Invoice ${invoice.invoice_number}</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 40px; color: #111; }
+        h1 { margin: 0 0 4px; } .meta { color: #6b7280; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th { text-align: left; padding: 8px; border-bottom: 2px solid #e5e7eb; color: #6b7280; font-size: 13px; }
+        .section { margin-bottom: 32px; }
+        .status { display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+        @media print { body { margin: 20px; } }
+      </style></head><body>
+      <div class="section">
+        <h1>Invoice ${invoice.invoice_number}</h1>
+        <p class="meta">Status: <span class="status">${invoice.status}</span></p>
+      </div>
+      <div style="display:flex;gap:60px;margin-bottom:32px">
+        <div>
+          <p class="meta" style="margin:0 0 4px;font-weight:600">Invoice Details</p>
+          <p class="meta" style="margin:2px 0">Issue Date: ${new Date(invoice.issue_date).toLocaleDateString()}</p>
+          <p class="meta" style="margin:2px 0">Due Date: ${new Date(invoice.due_date).toLocaleDateString()}</p>
+        </div>
+        <div>
+          <p class="meta" style="margin:0 0 4px;font-weight:600">Bill To</p>
+          <p style="margin:2px 0;font-weight:500">${invoice.client_name}</p>
+          ${invoice.client_email ? `<p class="meta" style="margin:2px 0">${invoice.client_email}</p>` : ''}
+          ${invoice.client_address ? `<p class="meta" style="margin:2px 0">${invoice.client_address}</p>` : ''}
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Description</th><th style="text-align:right">Qty (hrs)</th>
+          <th style="text-align:right">Rate</th><th style="text-align:right">Amount</th>
+        </tr></thead>
+        <tbody>${lineRows}</tbody>
+        <tfoot>${totalsHtml}</tfoot>
+      </table>
+      ${invoice.notes ? `<div class="section" style="margin-top:32px"><p class="meta" style="font-weight:600;margin-bottom:4px">Notes</p><p style="font-size:14px;color:#374151;white-space:pre-wrap">${invoice.notes}</p></div>` : ''}
+    </body></html>`);
+    w.document.close();
+    w.print();
+  }
+
+  function exportCsv() {
+    if (!invoice) return;
+    const rows = [['Description', 'Quantity (hrs)', 'Rate', 'Amount']];
+    (invoice.line_items || []).forEach((li) => {
+      rows.push([
+        `"${li.description.replace(/"/g, '""')}"`,
+        Number(li.quantity).toFixed(2),
+        Number(li.rate).toFixed(2),
+        Number(li.amount).toFixed(2),
+      ]);
+    });
+    rows.push([]);
+    rows.push(['Subtotal', '', '', Number(invoice.subtotal).toFixed(2)]);
+    if (Number(invoice.tax_rate) > 0) {
+      rows.push([`Tax (${Number(invoice.tax_rate)}%)`, '', '', Number(invoice.tax_amount).toFixed(2)]);
+    }
+    if (Number(invoice.credits_applied) > 0) {
+      rows.push(['Credits Applied', '', '', `-${Number(invoice.credits_applied).toFixed(2)}`]);
+    }
+    rows.push(['Total', '', '', Number(invoice.total).toFixed(2)]);
+
+    const csv = rows.map((r) => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${invoice.invoice_number}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (isLoading) return <div className="text-center py-12">Loading...</div>;
   if (!invoice) return <div className="text-center py-12">Invoice not found</div>;
 
@@ -62,6 +164,18 @@ export default function InvoiceDetailPage() {
           <h1 className="text-2xl font-bold mt-1">Invoice {invoice.invoice_number}</h1>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={exportPdf}
+            className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700"
+          >
+            Export PDF
+          </button>
+          <button
+            onClick={exportCsv}
+            className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700"
+          >
+            Export CSV
+          </button>
           {nextStatuses.map((s) => (
             <button
               key={s}
@@ -71,14 +185,12 @@ export default function InvoiceDetailPage() {
               Mark {s}
             </button>
           ))}
-          {invoice.status === 'draft' && (
-            <button
-              onClick={() => { if (confirm('Delete this invoice?')) deleteInvoice.mutate(); }}
-              className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700"
-            >
-              Delete
-            </button>
-          )}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700"
+          >
+            Delete
+          </button>
         </div>
       </div>
 
@@ -155,6 +267,14 @@ export default function InvoiceDetailPage() {
           <p className="text-sm text-gray-600 whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       )}
+
+      <ConfirmModal
+        open={showDeleteConfirm}
+        message="Delete this invoice? This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => { setShowDeleteConfirm(false); deleteInvoice.mutate(); }}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 }

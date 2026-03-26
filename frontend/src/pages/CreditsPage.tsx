@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { api } from '../api/client';
 import { Credit, Client } from '../types';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function CreditsPage() {
   const qc = useQueryClient();
@@ -10,6 +11,7 @@ export default function CreditsPage() {
   const [clientId, setClientId] = useState('');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const { data: credits = [], isLoading } = useQuery<Credit[]>({
     queryKey: ['credits'],
@@ -115,7 +117,7 @@ export default function CreditsPage() {
                   <td className="p-3">{new Date(c.created_at).toLocaleDateString()}</td>
                   <td className="p-3 text-right">
                     {Number(c.remaining_amount) > 0 && (
-                      <button onClick={() => { if (confirm('Delete?')) remove.mutate(c.id); }} className="text-red-600 hover:underline text-sm">Delete</button>
+                      <button onClick={() => setConfirmDeleteId(c.id)} className="text-red-600 hover:underline text-sm">Delete</button>
                     )}
                   </td>
                 </tr>
@@ -124,6 +126,14 @@ export default function CreditsPage() {
           </table>
         </div>
       )}
+
+      <ConfirmModal
+        open={confirmDeleteId !== null}
+        message="Delete this credit?"
+        confirmLabel="Delete"
+        onConfirm={() => { if (confirmDeleteId !== null) remove.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }
