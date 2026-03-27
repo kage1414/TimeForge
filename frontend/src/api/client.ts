@@ -1,21 +1,14 @@
-const API_BASE = '/api';
+const GRAPHQL_URL = '/graphql';
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+export async function gql<T = any>(query: string, variables?: Record<string, any>): Promise<T> {
+  const res = await fetch(GRAPHQL_URL, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    ...options,
+    body: JSON.stringify({ query, variables }),
   });
-  if (res.status === 204) return undefined as T;
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || 'Request failed');
+  const json = await res.json();
+  if (json.errors?.length) {
+    throw new Error(json.errors[0].message);
   }
-  return res.json();
+  return json.data;
 }
-
-export const api = {
-  get: <T>(path: string) => request<T>(path),
-  post: <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
-  put: <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
-  del: (path: string) => request(path, { method: 'DELETE' }),
-};

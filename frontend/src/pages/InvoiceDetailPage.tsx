@@ -2,9 +2,22 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { api } from '../api/client';
+import { gql } from '../api/client';
 import { Invoice } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
+
+const INVOICE_QUERY = `
+  query($id: Int!) {
+    invoice(id: $id) {
+      id client_id client_name client_email client_address
+      invoice_number status issue_date due_date
+      subtotal tax_rate tax_amount credits_applied total notes
+      line_items { id description quantity rate amount time_entry_id }
+      credits { id description amount remaining_amount }
+      created_at updated_at
+    }
+  }
+`;
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-800',
@@ -30,11 +43,13 @@ export default function InvoiceDetailPage() {
 
   const { data: invoice, isLoading } = useQuery<Invoice>({
     queryKey: ['invoice', id],
-    queryFn: () => api.get(`/invoices/${id}`),
+    queryFn: async () => (await gql<{ invoice: Invoice }>(INVOICE_QUERY, { id: Number(id) })).invoice,
   });
 
   const updateStatus = useMutation({
-    mutationFn: (status: string) => api.put(`/invoices/${id}/status`, { status }),
+    mutationFn: (status: string) =>
+      gql(`mutation($id: Int!, $status: String!) { updateInvoiceStatus(id: $id, status: $status) { id } }`,
+        { id: Number(id), status }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invoice', id] });
       qc.invalidateQueries({ queryKey: ['invoices'] });
@@ -44,7 +59,8 @@ export default function InvoiceDetailPage() {
   });
 
   const deleteInvoice = useMutation({
-    mutationFn: () => api.del(`/invoices/${id}`),
+    mutationFn: () =>
+      gql(`mutation($id: Int!) { deleteInvoice(id: $id) }`, { id: Number(id) }),
     onSuccess: () => {
       toast.success('Invoice deleted');
       navigate('/invoices');
@@ -140,7 +156,6 @@ export default function InvoiceDetailPage() {
       rows.push(['Credits Applied', '', '', `-${Number(invoice.credits_applied).toFixed(2)}`]);
     }
     rows.push(['Total', '', '', Number(invoice.total).toFixed(2)]);
-
     const csv = rows.map((r) => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -164,33 +179,18 @@ export default function InvoiceDetailPage() {
           <h1 className="text-2xl font-bold mt-1">Invoice {invoice.invoice_number}</h1>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={exportPdf}
-            className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700"
-          >
-            Export PDF
-          </button>
-          <button
-            onClick={exportCsv}
-            className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700"
-          >
-            Export CSV
-          </button>
+          <button onClick={exportPdf}
+            className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700">Export PDF</button>
+          <button onClick={exportCsv}
+            className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700">Export CSV</button>
           {nextStatuses.map((s) => (
-            <button
-              key={s}
-              onClick={() => updateStatus.mutate(s)}
-              className="bg-indigo-600 text-white px-3 py-2 rounded text-sm hover:bg-indigo-700 capitalize"
-            >
+            <button key={s} onClick={() => updateStatus.mutate(s)}
+              className="bg-indigo-600 text-white px-3 py-2 rounded text-sm hover:bg-indigo-700 capitalize">
               Mark {s}
             </button>
           ))}
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700"
-          >
-            Delete
-          </button>
+          <button onClick={() => setShowDeleteConfirm(true)}
+            className="bg-red-600 text-white px-3 py-2 rounded text-sm hover:bg-red-700">Delete</button>
         </div>
       </div>
 

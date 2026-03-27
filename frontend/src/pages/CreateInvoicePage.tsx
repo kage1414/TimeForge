@@ -2,10 +2,30 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { api } from '../api/client';
-import { Client, TimeEntry, Credit } from '../types';
+import { gql } from '../api/client';
+import { Client, TimeEntry } from '../types';
 
 type EntryAction = 'bill' | 'credit';
+
+const CLIENTS_QUERY = `query { clients { id name } }`;
+
+const UNBILLED_ENTRIES_QUERY = `
+  query($client_id: Int, $unbilled: Boolean) {
+    timeEntries(client_id: $client_id, unbilled: $unbilled) {
+      id project_id project_name description start_time
+      duration_minutes rate_override default_rate
+    }
+  }
+`;
+
+const BILLED_ENTRIES_QUERY = `
+  query($client_id: Int, $billed: Boolean) {
+    timeEntries(client_id: $client_id, billed: $billed) {
+      id project_id project_name description start_time
+      duration_minutes rate_override default_rate
+    }
+  }
+`;
 
 export default function CreateInvoicePage() {
   const navigate = useNavigate();
@@ -14,32 +34,25 @@ export default function CreateInvoicePage() {
   const [taxRate, setTaxRate] = useState('0');
   const [notes, setNotes] = useState('');
   const [dueInDays, setDueInDays] = useState('30');
-  // Unbilled entries: map of id -> action (bill or credit)
   const [entryActions, setEntryActions] = useState<Map<number, EntryAction>>(new Map());
-  // Billed entries selected as credit
   const [billedCredits, setBilledCredits] = useState<Set<number>>(new Set());
-  const [selectedCredits, setSelectedCredits] = useState<Set<number>>(new Set());
 
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ['clients'],
-    queryFn: () => api.get('/clients'),
+    queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
   const { data: unbilledEntries = [] } = useQuery<TimeEntry[]>({
     queryKey: ['unbilledEntries', clientId],
-    queryFn: () => api.get(`/time-entries?unbilled=true&client_id=${clientId}`),
+    queryFn: async () => (await gql<{ timeEntries: TimeEntry[] }>(UNBILLED_ENTRIES_QUERY,
+      { client_id: Number(clientId), unbilled: true })).timeEntries,
     enabled: !!clientId,
   });
 
   const { data: billedEntries = [] } = useQuery<TimeEntry[]>({
     queryKey: ['billedEntries', clientId],
-    queryFn: () => api.get(`/time-entries?billed=true&client_id=${clientId}`),
-    enabled: !!clientId,
-  });
-
-  const { data: availableCredits = [] } = useQuery<Credit[]>({
-    queryKey: ['availableCredits', clientId],
-    queryFn: () => api.get(`/credits?client_id=${clientId}&available=true`),
+    queryFn: async () => (await gql<{ timeEntries: TimeEntry[] }>(BILLED_ENTRIES_QUERY,
+      { client_id: Number(clientId), billed: true })).timeEntries,
     enabled: !!clientId,
   });
 
@@ -56,23 +69,28 @@ export default function CreateInvoicePage() {
         else creditUnbilledIds.push(id);
       });
 
-      return api.post<{ id: number }>('/invoices', {
-        client_id: Number(clientId),
-        issue_date: today.toISOString().split('T')[0],
-        due_date: due.toISOString().split('T')[0],
-        tax_rate: Number(taxRate),
-        notes,
-        time_entry_ids: billIds,
-        credit_time_entry_ids: [...creditUnbilledIds, ...Array.from(billedCredits)],
-        credit_ids: Array.from(selectedCredits),
-      });
+      return gql<{ createInvoice: { id: number } }>(
+        `mutation($input: CreateInvoiceInput!) { createInvoice(input: $input) { id } }`,
+        {
+          input: {
+            client_id: Number(clientId),
+            issue_date: today.toISOString().split('T')[0],
+            due_date: due.toISOString().split('T')[0],
+            tax_rate: Number(taxRate),
+            notes: notes || null,
+            time_entry_ids: billIds,
+            credit_time_entry_ids: [...creditUnbilledIds, ...Array.from(billedCredits)],
+            apply_credits: true,
+          },
+        }
+      );
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
       qc.invalidateQueries({ queryKey: ['timeEntries'] });
       qc.invalidateQueries({ queryKey: ['credits'] });
       toast.success('Invoice created');
-      navigate(`/invoices/${data.id}`);
+      navigate(`/invoices/${data.createInvoice.id}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -109,16 +127,9 @@ export default function CreateInvoicePage() {
     setBilledCredits(next);
   }
 
-  function toggleCredit(id: number) {
-    const next = new Set(selectedCredits);
-    next.has(id) ? next.delete(id) : next.add(id);
-    setSelectedCredits(next);
-  }
-
   function resetSelections() {
     setEntryActions(new Map());
     setBilledCredits(new Set());
-    setSelectedCredits(new Set());
   }
 
   function entryAmount(e: TimeEntry): number {
@@ -126,7 +137,6 @@ export default function CreateInvoicePage() {
     return (e.duration_minutes / 60) * Number(rate);
   }
 
-  // Calculate totals
   const billAmount = unbilledEntries
     .filter((e) => entryActions.get(e.id) === 'bill')
     .reduce((sum, e) => sum + entryAmount(e), 0);
@@ -139,15 +149,11 @@ export default function CreateInvoicePage() {
     .filter((e) => billedCredits.has(e.id))
     .reduce((sum, e) => sum + entryAmount(e), 0);
 
-  const existingCreditAmount = availableCredits
-    .filter((c) => selectedCredits.has(c.id))
-    .reduce((sum, c) => sum + Number(c.remaining_amount), 0);
-
-  const totalCreditAmount = unbilledCreditAmount + billedCreditAmount + existingCreditAmount;
+  const totalCreditAmount = unbilledCreditAmount + billedCreditAmount;
   const tax = billAmount * (Number(taxRate) / 100);
   const total = Math.max(0, billAmount + tax - totalCreditAmount);
 
-  const hasSelections = entryActions.size > 0 || billedCredits.size > 0 || selectedCredits.size > 0;
+  const hasSelections = entryActions.size > 0 || billedCredits.size > 0;
 
   return (
     <div>
@@ -158,11 +164,8 @@ export default function CreateInvoicePage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Client *</label>
-            <select
-              className="border rounded p-2 w-full"
-              value={clientId}
-              onChange={(e) => { setClientId(e.target.value); resetSelections(); }}
-            >
+            <select className="border rounded p-2 w-full" value={clientId}
+              onChange={(e) => { setClientId(e.target.value); resetSelections(); }}>
               <option value="">Select Client</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -222,24 +225,12 @@ export default function CreateInvoicePage() {
                         <td className="py-2 text-right">${Number(rate).toFixed(2)}</td>
                         <td className="py-2 text-right">${amount.toFixed(2)}</td>
                         <td className="py-2 text-center space-x-1">
-                          <button
-                            onClick={() => toggleEntryAction(e.id, 'bill')}
-                            className={`px-2 py-1 rounded text-xs font-medium border ${
-                              action === 'bill'
-                                ? 'bg-indigo-600 text-white border-indigo-600'
-                                : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
-                            }`}
-                          >
+                          <button onClick={() => toggleEntryAction(e.id, 'bill')}
+                            className={`px-2 py-1 rounded text-xs font-medium border ${action === 'bill' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'}`}>
                             Bill
                           </button>
-                          <button
-                            onClick={() => toggleEntryAction(e.id, 'credit')}
-                            className={`px-2 py-1 rounded text-xs font-medium border ${
-                              action === 'credit'
-                                ? 'bg-green-600 text-white border-green-600'
-                                : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'
-                            }`}
-                          >
+                          <button onClick={() => toggleEntryAction(e.id, 'credit')}
+                            className={`px-2 py-1 rounded text-xs font-medium border ${action === 'credit' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'}`}>
                             Credit
                           </button>
                         </td>
@@ -287,33 +278,6 @@ export default function CreateInvoicePage() {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Existing Credits */}
-          {availableCredits.length > 0 && (
-            <div className="bg-white rounded-lg shadow p-4 mb-6">
-              <h2 className="font-semibold mb-3">Available Credits</h2>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-gray-500 border-b">
-                    <th className="pb-2 w-8"></th>
-                    <th className="pb-2">Description</th>
-                    <th className="pb-2 text-right">Remaining</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {availableCredits.map((c) => (
-                    <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => toggleCredit(c.id)}>
-                      <td className="py-2">
-                        <input type="checkbox" checked={selectedCredits.has(c.id)} onChange={() => toggleCredit(c.id)} />
-                      </td>
-                      <td className="py-2">{c.description}</td>
-                      <td className="py-2 text-right">${Number(c.remaining_amount).toFixed(2)}</td>
-                    </tr>
-                  ))}
                 </tbody>
               </table>
             </div>

@@ -1,9 +1,20 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { api } from '../api/client';
+import { gql } from '../api/client';
 import { Credit, Client } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
+
+const CREDITS_QUERY = `
+  query {
+    credits {
+      id client_id client_name amount remaining_amount
+      description source_invoice_id applied_invoice_id created_at
+    }
+  }
+`;
+
+const CLIENTS_QUERY = `query { clients { id name } }`;
 
 export default function CreditsPage() {
   const qc = useQueryClient();
@@ -15,20 +26,22 @@ export default function CreditsPage() {
 
   const { data: credits = [], isLoading } = useQuery<Credit[]>({
     queryKey: ['credits'],
-    queryFn: () => api.get('/credits'),
+    queryFn: async () => (await gql<{ credits: Credit[] }>(CREDITS_QUERY)).credits,
   });
 
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ['clients'],
-    queryFn: () => api.get('/clients'),
+    queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
   const create = useMutation({
     mutationFn: () =>
-      api.post('/credits', {
-        client_id: Number(clientId),
-        amount: Number(amount),
-        description,
+      gql(`mutation($input: CreateCreditInput!) { createCredit(input: $input) { id } }`, {
+        input: {
+          client_id: Number(clientId),
+          amount: Number(amount),
+          description,
+        },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['credits'] });
@@ -42,7 +55,8 @@ export default function CreditsPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: number) => api.del(`/credits/${id}`),
+    mutationFn: (id: number) =>
+      gql(`mutation($id: Int!) { deleteCredit(id: $id) }`, { id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['credits'] });
       toast.success('Credit deleted');

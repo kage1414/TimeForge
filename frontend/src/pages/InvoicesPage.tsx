@@ -1,8 +1,20 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { api } from '../api/client';
+import { gql } from '../api/client';
 import { Invoice, Client } from '../types';
 import { useState } from 'react';
+
+const INVOICES_QUERY = `
+  query($client_id: Int, $status: String) {
+    invoices(client_id: $client_id, status: $status) {
+      id client_id client_name invoice_number status
+      issue_date due_date subtotal tax_rate tax_amount
+      credits_applied total notes created_at updated_at
+    }
+  }
+`;
+
+const CLIENTS_QUERY = `query { clients { id name } }`;
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-800',
@@ -16,19 +28,18 @@ export default function InvoicesPage() {
   const [filterClient, setFilterClient] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
 
-  const params = new URLSearchParams();
-  if (filterClient) params.set('client_id', filterClient);
-  if (filterStatus) params.set('status', filterStatus);
-  const qs = params.toString();
+  const vars: any = {};
+  if (filterClient) vars.client_id = Number(filterClient);
+  if (filterStatus) vars.status = filterStatus;
 
   const { data: invoices = [], isLoading } = useQuery<Invoice[]>({
-    queryKey: ['invoices', qs],
-    queryFn: () => api.get(`/invoices${qs ? `?${qs}` : ''}`),
+    queryKey: ['invoices', filterClient, filterStatus],
+    queryFn: async () => (await gql<{ invoices: Invoice[] }>(INVOICES_QUERY, vars)).invoices,
   });
 
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ['clients'],
-    queryFn: () => api.get('/clients'),
+    queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
   return (

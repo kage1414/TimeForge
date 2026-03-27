@@ -1,23 +1,31 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { api } from '../api/client';
+import { gql } from '../api/client';
 import { Client } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
+
+const CLIENTS_QUERY = `query { clients { id name email address phone created_at updated_at } }`;
 
 export default function ClientsPage() {
   const qc = useQueryClient();
   const { data: clients = [], isLoading } = useQuery<Client[]>({
     queryKey: ['clients'],
-    queryFn: () => api.get('/clients'),
+    queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
   const [editing, setEditing] = useState<Partial<Client> | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const save = useMutation({
-    mutationFn: (c: Partial<Client>) =>
-      c.id ? api.put(`/clients/${c.id}`, c) : api.post('/clients', c),
+    mutationFn: (c: Partial<Client>) => {
+      if (c.id) {
+        return gql(`mutation($id: Int!, $input: UpdateClientInput!) { updateClient(id: $id, input: $input) { id } }`,
+          { id: c.id, input: { name: c.name, email: c.email, address: c.address, phone: c.phone } });
+      }
+      return gql(`mutation($input: CreateClientInput!) { createClient(input: $input) { id } }`,
+        { input: { name: c.name, email: c.email, address: c.address, phone: c.phone } });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] });
       setEditing(null);
@@ -27,7 +35,8 @@ export default function ClientsPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: number) => api.del(`/clients/${id}`),
+    mutationFn: (id: number) =>
+      gql(`mutation($id: Int!) { deleteClient(id: $id) }`, { id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] });
       toast.success('Client deleted');

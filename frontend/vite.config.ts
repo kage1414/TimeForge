@@ -11,6 +11,10 @@ export default defineConfig({
         target: 'http://backend:4000',
         changeOrigin: true,
       },
+      '/graphql': {
+        target: 'http://backend:4000',
+        changeOrigin: true,
+      },
     },
   },
 });

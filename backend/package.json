@@ -11,8 +11,11 @@
     "seed": "knex seed:run --knexfile src/db/knexfile.ts"
   },
   "dependencies": {
+    "@apollo/server": "^4.11.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "graphql": "^16.13.2",
+    "graphql-tag": "^2.12.6",
     "knex": "^3.1.0",
     "pg": "^8.12.0"
   },

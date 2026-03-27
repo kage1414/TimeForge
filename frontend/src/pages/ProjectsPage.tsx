@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { api } from "../api/client";
+import { gql } from "../api/client";
 import { Project, Client } from "../types";
 import ConfirmModal from "../components/ConfirmModal";
+
+const PROJECTS_QUERY = `query { projects { id client_id client_name name description default_rate is_active created_at updated_at } }`;
+const CLIENTS_QUERY = `query { clients { id name } }`;
 
 const emptyProject = {
   client_id: "",
@@ -21,24 +24,28 @@ export default function ProjectsPage() {
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ["projects"],
-    queryFn: () => api.get("/projects"),
+    queryFn: async () => (await gql<{ projects: Project[] }>(PROJECTS_QUERY)).projects,
   });
 
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ["clients"],
-    queryFn: () => api.get("/clients"),
+    queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
   const save = useMutation({
     mutationFn: () => {
       const body = {
-        ...form,
         client_id: Number(form.client_id),
+        name: form.name,
+        description: form.description,
         default_rate: Number(form.default_rate),
       };
-      return editingId
-        ? api.put(`/projects/${editingId}`, body)
-        : api.post("/projects", body);
+      if (editingId) {
+        return gql(`mutation($id: Int!, $input: UpdateProjectInput!) { updateProject(id: $id, input: $input) { id } }`,
+          { id: editingId, input: body });
+      }
+      return gql(`mutation($input: CreateProjectInput!) { createProject(input: $input) { id } }`,
+        { input: body });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
@@ -49,7 +56,8 @@ export default function ProjectsPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: number) => api.del(`/projects/${id}`),
+    mutationFn: (id: number) =>
+      gql(`mutation($id: Int!) { deleteProject(id: $id) }`, { id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success("Project deleted");

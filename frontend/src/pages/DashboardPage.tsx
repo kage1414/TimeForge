@@ -1,12 +1,30 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../api/client';
+import { gql } from '../api/client';
 import { Dashboard } from '../types';
 import { Link } from 'react-router-dom';
+
+const DASHBOARD_QUERY = `
+  query {
+    dashboard {
+      total_clients
+      active_projects
+      running_timers { id project_name description start_time }
+      unbilled_hours
+      unbilled_amount
+      recent_invoices { id invoice_number client_name total status }
+      outstanding_amount
+      available_credits
+    }
+  }
+`;
 
 export default function DashboardPage() {
   const { data, isLoading } = useQuery<Dashboard>({
     queryKey: ['dashboard'],
-    queryFn: () => api.get('/dashboard'),
+    queryFn: async () => {
+      const res = await gql<{ dashboard: Dashboard }>(DASHBOARD_QUERY);
+      return res.dashboard;
+    },
     refetchInterval: 30000,
   });
 
