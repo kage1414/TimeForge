@@ -37,7 +37,8 @@ Full-stack invoicing and time-tracking application.
 │   │       ├── InvoicesPage.tsx
 │   │       ├── InvoiceDetailPage.tsx
 │   │       ├── CreateInvoicePage.tsx
-│   │       └── CreditsPage.tsx
+│   │       ├── CreditsPage.tsx
+│   │       └── SettingsPage.tsx
 │   ├── package.json
 │   ├── vite.config.ts
 │   ├── tailwind.config.js
@@ -53,6 +54,7 @@ Full-stack invoicing and time-tracking application.
 - **invoices**: id, client_id, invoice_number, status (draft/sent/paid/overdue/cancelled), issue_date, due_date, subtotal, tax_rate, tax_amount, credits_applied, total, notes
 - **invoice_line_items**: id, invoice_id, description, quantity, rate, amount, time_entry_id
 - **credits**: id, client_id, amount, remaining_amount, description, source_invoice_id, applied_invoice_id
+- **user_settings**: id (single row, id=1), first_name, last_name, email, address1, address2, city, state, phone, venmo, cashapp, paypal, zelle
 
 ## Key Commands
 ```bash
@@ -82,15 +84,17 @@ Single endpoint at `/graphql` (Apollo Server).
 - `timeEntries(project_id, client_id, unbilled, billed)`, `timeEntry(id)` - Time entry queries
 - `invoices(client_id, status)`, `invoice(id)` - Invoice queries (invoice includes line_items and credits)
 - `credits(client_id, available)` - Credit queries
+- `userSettings` - Single-row user profile (personal details + payment methods)
 - `dashboard` - Summary stats (running timers, unbilled hours/amount, recent invoices, outstanding amount)
 
 ### Mutations
 - `createClient`, `updateClient`, `deleteClient`
 - `createProject`, `updateProject`, `deleteProject`
 - `createTimeEntry`, `updateTimeEntry`, `deleteTimeEntry`, `stopTimeEntry`, `restartTimeEntry`, `unbillTimeEntry`, `creditTimeEntry`
-- `createInvoice(input)` - Creates invoice; accepts `time_entry_ids` (to bill), `credit_time_entry_ids` (to create credits), `apply_credits` (auto-apply existing credits)
+- `createInvoice(input)` - Creates invoice; accepts `time_entry_ids` (to bill), `credit_time_entry_ids` (to create credits applied to invoice)
 - `updateInvoiceStatus`, `deleteInvoice`
 - `createCredit`, `deleteCredit`
+- `updateUserSettings(input)` - Update user profile and payment methods
 
 ## Environment Variables
 - `DATABASE_URL` - PostgreSQL connection string (default: postgresql://postgres:postgres@db:5432/invoicer)

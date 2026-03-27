@@ -3,8 +3,10 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { gql } from '../api/client';
-import { Invoice } from '../types';
+import { Invoice, UserSettings } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
+
+const SETTINGS_QUERY = `query { userSettings { first_name last_name email address1 address2 city state phone venmo cashapp paypal zelle } }`;
 
 const INVOICE_QUERY = `
   query($id: Int!) {
@@ -44,6 +46,11 @@ export default function InvoiceDetailPage() {
   const { data: invoice, isLoading } = useQuery<Invoice>({
     queryKey: ['invoice', id],
     queryFn: async () => (await gql<{ invoice: Invoice }>(INVOICE_QUERY, { id: Number(id) })).invoice,
+  });
+
+  const { data: settings } = useQuery<UserSettings>({
+    queryKey: ['userSettings'],
+    queryFn: async () => (await gql<{ userSettings: UserSettings }>(SETTINGS_QUERY)).userSettings,
   });
 
   const updateStatus = useMutation({
@@ -96,45 +103,74 @@ export default function InvoiceDetailPage() {
           <td style="padding:4px 8px;text-align:right;color:#16a34a;font-size:12px">-$${Number(c.amount).toFixed(2)}</td></tr>`;
       });
     }
-    totalsHtml += `<tr style="border-top:2px solid #111"><td colspan="3" style="padding:8px;text-align:right;font-weight:bold;font-size:1.1em">Total</td>
-      <td style="padding:8px;text-align:right;font-weight:bold;font-size:1.1em">$${Number(invoice.total).toFixed(2)}</td></tr>`;
+    totalsHtml += `<tr style="border-top:2px solid #111"><td colspan="3" style="padding:8px;text-align:right;font-weight:bold">Total:</td>
+      <td style="padding:8px;text-align:right;font-weight:bold">$${Number(invoice.total).toFixed(2)}</td></tr>`;
+    totalsHtml += `<tr><td colspan="3" style="padding:8px;text-align:right;font-weight:700;font-size:1.1em">Amount Due (USD):</td>
+      <td style="padding:8px;text-align:right;font-weight:700;font-size:1.1em">$${Number(invoice.total).toFixed(2)}</td></tr>`;
+
+    const fullName = settings ? [settings.first_name, settings.last_name].filter(Boolean).join(' ') : '';
+    const cityState = settings ? [settings.city, settings.state].filter(Boolean).join(', ') : '';
+    const paymentLines = [
+      settings?.venmo ? `Venmo: ${settings.venmo}` : '',
+      settings?.cashapp ? `Cash App: ${settings.cashapp}` : '',
+      settings?.paypal ? `PayPal: ${settings.paypal}` : '',
+      settings?.zelle ? `Zelle: ${settings.zelle}` : '',
+    ].filter(Boolean);
 
     w.document.write(`<!DOCTYPE html><html><head><title>Invoice ${invoice.invoice_number}</title>
       <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 40px; color: #111; }
-        h1 { margin: 0 0 4px; } .meta { color: #6b7280; font-size: 14px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-        th { text-align: left; padding: 8px; border-bottom: 2px solid #e5e7eb; color: #6b7280; font-size: 13px; }
-        .section { margin-bottom: 32px; }
-        .status { display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 40px; color: #111; font-size: 14px; }
+        h1 { margin: 0; font-size: 36px; text-transform: uppercase; letter-spacing: 2px; }
+        table { width: 100%; border-collapse: collapse; }
+        .line-table th { text-align: left; padding: 10px 8px; border-top: 2px solid #111; border-bottom: 2px solid #111; font-size: 13px; color: #111; }
+        .line-table td { padding: 10px 8px; border-bottom: 1px solid #e5e7eb; }
+        .details-table td { padding: 4px 12px; font-size: 14px; }
         @media print { body { margin: 20px; } }
       </style></head><body>
-      <div class="section">
-        <h1>Invoice ${invoice.invoice_number}</h1>
-        <p class="meta">Status: <span class="status">${invoice.status}</span></p>
+
+      <!-- Header: user info right-aligned, INVOICE title -->
+      <div style="text-align:right;margin-bottom:32px">
+        <h1>INVOICE</h1>
+        ${paymentLines.length ? `<p style="margin:4px 0 16px;color:#6b7280;font-size:13px">${paymentLines.join(' &middot; ')}</p>` : '<div style="margin-bottom:16px"></div>'}
+        ${fullName ? `<p style="margin:2px 0;font-weight:600">${fullName}</p>` : ''}
+        ${settings?.address1 ? `<p style="margin:2px 0">${settings.address1}</p>` : ''}
+        ${settings?.address2 ? `<p style="margin:2px 0">${settings.address2}</p>` : ''}
+        ${cityState ? `<p style="margin:2px 0">${cityState}</p>` : ''}
+        ${settings?.phone ? `<p style="margin:8px 0 0;color:#6b7280">${settings.phone}</p>` : ''}
+        ${settings?.email ? `<p style="margin:2px 0;color:#6b7280">${settings.email}</p>` : ''}
       </div>
-      <div style="display:flex;gap:60px;margin-bottom:32px">
+
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px" />
+
+      <!-- Bill To + Invoice Details side by side -->
+      <div style="display:flex;justify-content:space-between;margin-bottom:32px">
         <div>
-          <p class="meta" style="margin:0 0 4px;font-weight:600">Invoice Details</p>
-          <p class="meta" style="margin:2px 0">Issue Date: ${new Date(invoice.issue_date).toLocaleDateString()}</p>
-          <p class="meta" style="margin:2px 0">Due Date: ${new Date(invoice.due_date).toLocaleDateString()}</p>
+          <p style="margin:0 0 4px;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:1px">Bill To</p>
+          <p style="margin:2px 0;font-weight:600">${invoice.client_name}</p>
+          ${invoice.client_address ? `<p style="margin:2px 0">${invoice.client_address}</p>` : ''}
+          ${invoice.client_email ? `<p style="margin:6px 0 0;color:#6b7280">${invoice.client_email}</p>` : ''}
         </div>
-        <div>
-          <p class="meta" style="margin:0 0 4px;font-weight:600">Bill To</p>
-          <p style="margin:2px 0;font-weight:500">${invoice.client_name}</p>
-          ${invoice.client_email ? `<p class="meta" style="margin:2px 0">${invoice.client_email}</p>` : ''}
-          ${invoice.client_address ? `<p class="meta" style="margin:2px 0">${invoice.client_address}</p>` : ''}
+        <div style="text-align:right">
+          <table class="details-table" style="margin-left:auto">
+            <tr><td style="color:#6b7280;text-align:right">Invoice Number:</td><td style="text-align:right;font-weight:500">${invoice.invoice_number}</td></tr>
+            <tr><td style="color:#6b7280;text-align:right">Invoice Date:</td><td style="text-align:right">${new Date(invoice.issue_date).toLocaleDateString()}</td></tr>
+            <tr><td style="color:#6b7280;text-align:right">Payment Due:</td><td style="text-align:right">${new Date(invoice.due_date).toLocaleDateString()}</td></tr>
+            <tr style="font-weight:600"><td style="padding-top:8px;text-align:right">Amount Due (USD):</td><td style="padding-top:8px;text-align:right">$${Number(invoice.total).toFixed(2)}</td></tr>
+          </table>
         </div>
       </div>
-      <table>
+
+      <!-- Line Items -->
+      <table class="line-table">
         <thead><tr>
-          <th>Description</th><th style="text-align:right">Qty (hrs)</th>
+          <th>Services</th><th style="text-align:right">Hours</th>
           <th style="text-align:right">Rate</th><th style="text-align:right">Amount</th>
         </tr></thead>
         <tbody>${lineRows}</tbody>
         <tfoot>${totalsHtml}</tfoot>
       </table>
-      ${invoice.notes ? `<div class="section" style="margin-top:32px"><p class="meta" style="font-weight:600;margin-bottom:4px">Notes</p><p style="font-size:14px;color:#374151;white-space:pre-wrap">${invoice.notes}</p></div>` : ''}
+
+      ${invoice.notes ? `<div style="margin-top:32px"><p style="font-weight:600;margin-bottom:4px;color:#6b7280">Notes</p><p style="color:#374151;white-space:pre-wrap">${invoice.notes}</p></div>` : ''}
     </body></html>`);
     w.document.close();
     w.print();
@@ -274,9 +310,21 @@ export default function InvoiceDetailPage() {
       </div>
 
       {invoice.notes && (
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
           <h2 className="font-semibold mb-2">Notes</h2>
           <p className="text-sm text-gray-600 whitespace-pre-wrap">{invoice.notes}</p>
+        </div>
+      )}
+
+      {settings && (settings.venmo || settings.cashapp || settings.paypal || settings.zelle) && (
+        <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <h2 className="font-semibold mb-2">Payment Methods</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            {settings.venmo && <div><span className="text-gray-500">Venmo:</span> {settings.venmo}</div>}
+            {settings.cashapp && <div><span className="text-gray-500">Cash App:</span> {settings.cashapp}</div>}
+            {settings.paypal && <div><span className="text-gray-500">PayPal:</span> {settings.paypal}</div>}
+            {settings.zelle && <div><span className="text-gray-500">Zelle:</span> {settings.zelle}</div>}
+          </div>
         </div>
       )}
 

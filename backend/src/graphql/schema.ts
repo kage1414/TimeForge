@@ -94,6 +94,38 @@ export const typeDefs = `#graphql
     available_credits: Float!
   }
 
+  type UserSettings {
+    id: Int!
+    first_name: String
+    last_name: String
+    email: String
+    address1: String
+    address2: String
+    city: String
+    state: String
+    phone: String
+    venmo: String
+    cashapp: String
+    paypal: String
+    zelle: String
+    updated_at: String!
+  }
+
+  input UpdateUserSettingsInput {
+    first_name: String
+    last_name: String
+    email: String
+    address1: String
+    address2: String
+    city: String
+    state: String
+    phone: String
+    venmo: String
+    cashapp: String
+    paypal: String
+    zelle: String
+  }
+
   type Query {
     clients: [Client!]!
     client(id: Int!): Client
@@ -104,6 +136,7 @@ export const typeDefs = `#graphql
     invoices(client_id: Int, status: String): [Invoice!]!
     invoice(id: Int!): Invoice
     credits(client_id: Int, available: Boolean): [Credit!]!
+    userSettings: UserSettings!
     dashboard: Dashboard!
   }
 
@@ -193,5 +226,6 @@ export const typeDefs = `#graphql
     deleteInvoice(id: Int!): Boolean!
     createCredit(input: CreateCreditInput!): Credit!
     deleteCredit(id: Int!): Boolean!
+    updateUserSettings(input: UpdateUserSettingsInput!): UserSettings!
   }
 `;

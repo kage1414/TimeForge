@@ -82,6 +82,23 @@ export interface Credit {
   created_at: string;
 }
 
+export interface UserSettings {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  address1: string;
+  address2: string;
+  city: string;
+  state: string;
+  phone: string;
+  venmo: string;
+  cashapp: string;
+  paypal: string;
+  zelle: string;
+  updated_at: string;
+}
+
 export interface Dashboard {
   total_clients: number;
   active_projects: number;

@@ -30,6 +30,9 @@ export const resolvers = {
   Credit: {
     created_at: (e: any) => toISO(e.created_at),
   },
+  UserSettings: {
+    updated_at: (e: any) => toISO(e.updated_at),
+  },
   Query: {
     clients: () => db('clients').orderBy('name'),
 
@@ -109,6 +112,8 @@ export const resolvers = {
       if (available) query = query.where('credits.remaining_amount', '>', 0);
       return query.orderBy('credits.created_at', 'desc');
     },
+
+    userSettings: () => db('user_settings').where('id', 1).first(),
 
     dashboard: async () => {
       const [totalClients] = await db('clients').count('id as count');
@@ -433,6 +438,14 @@ export const resolvers = {
     deleteCredit: async (_: any, { id }: { id: number }) => {
       await db('credits').where('id', id).del();
       return true;
+    },
+
+    updateUserSettings: async (_: any, { input }: any) => {
+      const [settings] = await db('user_settings')
+        .where('id', 1)
+        .update({ ...input, updated_at: db.fn.now() })
+        .returning('*');
+      return settings;
     },
   },
 };

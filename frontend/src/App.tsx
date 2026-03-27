@@ -7,6 +7,7 @@ import InvoicesPage from './pages/InvoicesPage';
 import InvoiceDetailPage from './pages/InvoiceDetailPage';
 import CreateInvoicePage from './pages/CreateInvoicePage';
 import CreditsPage from './pages/CreditsPage';
+import SettingsPage from './pages/SettingsPage';
 
 const navItems = [
   { path: '/', label: 'Dashboard' },
@@ -15,6 +16,7 @@ const navItems = [
   { path: '/time', label: 'Time Tracking' },
   { path: '/invoices', label: 'Invoices' },
   { path: '/credits', label: 'Credits' },
+  { path: '/settings', label: 'Settings' },
 ];
 
 export default function App() {
@@ -58,6 +60,7 @@ export default function App() {
           <Route path="/invoices/new" element={<CreateInvoicePage />} />
           <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
           <Route path="/credits" element={<CreditsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>
