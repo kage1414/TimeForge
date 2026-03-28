@@ -2,8 +2,13 @@ export const typeDefs = `#graphql
   type Client {
     id: Int!
     name: String!
+    company: String
     email: String
-    address: String
+    address1: String
+    address2: String
+    city: String
+    state: String
+    zip: String
     phone: String
     created_at: String!
     updated_at: String!
@@ -65,8 +70,13 @@ export const typeDefs = `#graphql
     id: Int!
     client_id: Int!
     client_name: String
+    client_company: String
     client_email: String
-    client_address: String
+    client_address1: String
+    client_address2: String
+    client_city: String
+    client_state: String
+    client_zip: String
     invoice_number: String!
     status: String!
     issue_date: String!
@@ -96,6 +106,7 @@ export const typeDefs = `#graphql
 
   type UserSettings {
     id: Int!
+    company: String
     first_name: String
     last_name: String
     email: String
@@ -103,6 +114,7 @@ export const typeDefs = `#graphql
     address2: String
     city: String
     state: String
+    zip: String
     phone: String
     venmo: String
     cashapp: String
@@ -112,6 +124,7 @@ export const typeDefs = `#graphql
   }
 
   input UpdateUserSettingsInput {
+    company: String
     first_name: String
     last_name: String
     email: String
@@ -119,6 +132,7 @@ export const typeDefs = `#graphql
     address2: String
     city: String
     state: String
+    zip: String
     phone: String
     venmo: String
     cashapp: String
@@ -142,15 +156,25 @@ export const typeDefs = `#graphql
 
   input CreateClientInput {
     name: String!
+    company: String
     email: String
-    address: String
+    address1: String
+    address2: String
+    city: String
+    state: String
+    zip: String
     phone: String
   }
 
   input UpdateClientInput {
     name: String
+    company: String
     email: String
-    address: String
+    address1: String
+    address2: String
+    city: String
+    state: String
+    zip: String
     phone: String
   }
 

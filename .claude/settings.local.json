@@ -8,7 +8,8 @@
       "Bash(ls node_modules/@apollo/server/express4*)",
       "Bash(node -e \"const p = require\\(''./node_modules/@apollo/server/package.json''\\); console.log\\(p.version\\); console.log\\(Object.keys\\(p.exports || {}\\).filter\\(k => k.includes\\(''express''\\)\\).join\\(''\\\\n''\\)\\)\")",
       "Bash(node -e \"const p = require\\(''./node_modules/@apollo/server/package.json''\\); console.log\\(JSON.stringify\\(Object.keys\\(p.exports || {}\\), null, 2\\)\\)\")",
-      "Bash(yarn migrate:*)"
+      "Bash(yarn migrate:*)",
+      "Bash(docker-compose exec:*)"
     ]
   }
 }

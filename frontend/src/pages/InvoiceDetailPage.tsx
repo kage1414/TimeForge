@@ -6,12 +6,12 @@ import { gql } from '../api/client';
 import { Invoice, UserSettings } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
 
-const SETTINGS_QUERY = `query { userSettings { first_name last_name email address1 address2 city state phone venmo cashapp paypal zelle } }`;
+const SETTINGS_QUERY = `query { userSettings { company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle } }`;
 
 const INVOICE_QUERY = `
   query($id: Int!) {
     invoice(id: $id) {
-      id client_id client_name client_email client_address
+      id client_id client_name client_company client_email client_address1 client_address2 client_city client_state client_zip
       invoice_number status issue_date due_date
       subtotal tax_rate tax_amount credits_applied total notes
       line_items { id description quantity rate amount time_entry_id }
@@ -81,7 +81,7 @@ export default function InvoiceDetailPage() {
     if (!w) return;
     const lineRows = (invoice.line_items || []).map((li) =>
       `<tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${li.description}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${(() => { const [first, ...rest] = li.description.split('\n'); const dashIdx = first.indexOf(' - '); const name = dashIdx >= 0 ? first.slice(0, dashIdx) : first; const date = dashIdx >= 0 ? first.slice(dashIdx) : ''; return `<strong>${name}</strong>${date}${rest.length ? '<br><em>' + rest.join('<br>') + '</em>' : ''}`; })()}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${Number(li.quantity).toFixed(2)}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">$${Number(li.rate).toFixed(2)}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">$${Number(li.amount).toFixed(2)}</td>
@@ -109,7 +109,7 @@ export default function InvoiceDetailPage() {
       <td style="padding:8px;text-align:right;font-weight:700;font-size:1.1em">$${Number(invoice.total).toFixed(2)}</td></tr>`;
 
     const fullName = settings ? [settings.first_name, settings.last_name].filter(Boolean).join(' ') : '';
-    const cityState = settings ? [settings.city, settings.state].filter(Boolean).join(', ') : '';
+    const cityStateZip = settings ? [settings.city, settings.state].filter(Boolean).join(', ') + (settings.zip ? ` ${settings.zip}` : '') : '';
     const paymentLines = [
       settings?.venmo ? `Venmo: ${settings.venmo}` : '',
       settings?.cashapp ? `Cash App: ${settings.cashapp}` : '',
@@ -132,10 +132,11 @@ export default function InvoiceDetailPage() {
       <div style="text-align:right;margin-bottom:32px">
         <h1>INVOICE</h1>
         ${paymentLines.length ? `<p style="margin:4px 0 16px;color:#6b7280;font-size:13px">${paymentLines.join(' &middot; ')}</p>` : '<div style="margin-bottom:16px"></div>'}
+        ${settings?.company ? `<p style="margin:2px 0;font-weight:700;font-size:16px">${settings.company}</p>` : ''}
         ${fullName ? `<p style="margin:2px 0;font-weight:600">${fullName}</p>` : ''}
         ${settings?.address1 ? `<p style="margin:2px 0">${settings.address1}</p>` : ''}
         ${settings?.address2 ? `<p style="margin:2px 0">${settings.address2}</p>` : ''}
-        ${cityState ? `<p style="margin:2px 0">${cityState}</p>` : ''}
+        ${cityStateZip ? `<p style="margin:2px 0">${cityStateZip}</p>` : ''}
         ${settings?.phone ? `<p style="margin:8px 0 0;color:#6b7280">${settings.phone}</p>` : ''}
         ${settings?.email ? `<p style="margin:2px 0;color:#6b7280">${settings.email}</p>` : ''}
       </div>
@@ -146,8 +147,11 @@ export default function InvoiceDetailPage() {
       <div style="display:flex;justify-content:space-between;margin-bottom:32px">
         <div>
           <p style="margin:0 0 4px;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:1px">Bill To</p>
-          <p style="margin:2px 0;font-weight:600">${invoice.client_name}</p>
-          ${invoice.client_address ? `<p style="margin:2px 0">${invoice.client_address}</p>` : ''}
+          ${invoice.client_company ? `<p style="margin:2px 0;font-weight:700">${invoice.client_company}</p>` : ''}
+          <p style="margin:2px 0;font-weight:${invoice.client_company ? '500' : '600'}">${invoice.client_name}</p>
+          ${invoice.client_address1 ? `<p style="margin:2px 0">${invoice.client_address1}</p>` : ''}
+          ${invoice.client_address2 ? `<p style="margin:2px 0">${invoice.client_address2}</p>` : ''}
+          ${invoice.client_city || invoice.client_state || invoice.client_zip ? `<p style="margin:2px 0">${[invoice.client_city, invoice.client_state].filter(Boolean).join(', ')}${invoice.client_zip ? ` ${invoice.client_zip}` : ''}</p>` : ''}
           ${invoice.client_email ? `<p style="margin:6px 0 0;color:#6b7280">${invoice.client_email}</p>` : ''}
         </div>
         <div style="text-align:right">
@@ -248,9 +252,12 @@ export default function InvoiceDetailPage() {
         </div>
         <div className="bg-white rounded-lg shadow p-4">
           <h2 className="font-semibold mb-2">Client</h2>
-          <p className="font-medium">{invoice.client_name}</p>
+          {invoice.client_company && <p className="font-medium">{invoice.client_company}</p>}
+          <p className={invoice.client_company ? 'text-sm' : 'font-medium'}>{invoice.client_name}</p>
           {invoice.client_email && <p className="text-sm text-gray-500">{invoice.client_email}</p>}
-          {invoice.client_address && <p className="text-sm text-gray-500">{invoice.client_address}</p>}
+          {invoice.client_address1 && <p className="text-sm text-gray-500">{invoice.client_address1}</p>}
+          {invoice.client_address2 && <p className="text-sm text-gray-500">{invoice.client_address2}</p>}
+          {(invoice.client_city || invoice.client_state || invoice.client_zip) && <p className="text-sm text-gray-500">{[invoice.client_city, invoice.client_state].filter(Boolean).join(', ')}{invoice.client_zip ? ` ${invoice.client_zip}` : ''}</p>}
         </div>
       </div>
 
@@ -268,7 +275,7 @@ export default function InvoiceDetailPage() {
           <tbody>
             {(invoice.line_items || []).map((li) => (
               <tr key={li.id} className="border-b last:border-0">
-                <td className="py-2">{li.description}</td>
+                <td className="py-2">{(() => { const [first, ...rest] = li.description.split('\n'); const dashIdx = first.indexOf(' - '); const name = dashIdx >= 0 ? first.slice(0, dashIdx) : first; const date = dashIdx >= 0 ? first.slice(dashIdx) : ''; return <><span className="font-semibold">{name}</span>{date && <span>{date}</span>}{rest.length > 0 && <><br/><span className="italic">{rest.join('\n')}</span></>}</>; })()}</td>
                 <td className="py-2 text-right">{Number(li.quantity).toFixed(2)}</td>
                 <td className="py-2 text-right">${Number(li.rate).toFixed(2)}</td>
                 <td className="py-2 text-right">${Number(li.amount).toFixed(2)}</td>

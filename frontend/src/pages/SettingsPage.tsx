@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { gql } from '../api/client';
 import { UserSettings } from '../types';
 
-const SETTINGS_FIELDS = 'id first_name last_name email address1 address2 city state phone venmo cashapp paypal zelle';
+const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle';
 
 const SETTINGS_QUERY = `query { userSettings { ${SETTINGS_FIELDS} } }`;
 
@@ -16,6 +16,7 @@ const UPDATE_SETTINGS_MUTATION = `
 
 export default function SettingsPage() {
   const qc = useQueryClient();
+  const [company, setCompany] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -23,6 +24,7 @@ export default function SettingsPage() {
   const [address2, setAddress2] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  const [zip, setZip] = useState('');
   const [phone, setPhone] = useState('');
   const [venmo, setVenmo] = useState('');
   const [cashapp, setCashapp] = useState('');
@@ -36,6 +38,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (settings) {
+      setCompany(settings.company || '');
       setFirstName(settings.first_name || '');
       setLastName(settings.last_name || '');
       setEmail(settings.email || '');
@@ -43,6 +46,7 @@ export default function SettingsPage() {
       setAddress2(settings.address2 || '');
       setCity(settings.city || '');
       setState(settings.state || '');
+      setZip(settings.zip || '');
       setPhone(settings.phone || '');
       setVenmo(settings.venmo || '');
       setCashapp(settings.cashapp || '');
@@ -55,6 +59,7 @@ export default function SettingsPage() {
     mutationFn: () =>
       gql(UPDATE_SETTINGS_MUTATION, {
         input: {
+          company: company || null,
           first_name: firstName || null,
           last_name: lastName || null,
           email: email || null,
@@ -62,6 +67,7 @@ export default function SettingsPage() {
           address2: address2 || null,
           city: city || null,
           state: state || null,
+          zip: zip || null,
           phone: phone || null,
           venmo: venmo || null,
           cashapp: cashapp || null,
@@ -84,6 +90,10 @@ export default function SettingsPage() {
         <div className="bg-white rounded-lg shadow p-4">
           <h2 className="font-semibold mb-4">Personal Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+              <input className="border rounded p-2 w-full" value={company} onChange={(e) => setCompany(e.target.value)} />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
               <input className="border rounded p-2 w-full" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
@@ -115,6 +125,10 @@ export default function SettingsPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
               <input className="border rounded p-2 w-full" value={state} onChange={(e) => setState(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Zip</label>
+              <input className="border rounded p-2 w-full" value={zip} onChange={(e) => setZip(e.target.value)} />
             </div>
           </div>
         </div>

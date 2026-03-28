@@ -1,8 +1,13 @@
 export interface Client {
   id: number;
   name: string;
+  company: string;
   email: string;
-  address: string;
+  address1: string;
+  address2: string;
+  city: string;
+  state: string;
+  zip: string;
   phone: string;
   created_at: string;
   updated_at: string;
@@ -42,8 +47,13 @@ export interface Invoice {
   id: number;
   client_id: number;
   client_name: string;
+  client_company?: string;
   client_email?: string;
-  client_address?: string;
+  client_address1?: string;
+  client_address2?: string;
+  client_city?: string;
+  client_state?: string;
+  client_zip?: string;
   invoice_number: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   issue_date: string;
@@ -84,6 +94,7 @@ export interface Credit {
 
 export interface UserSettings {
   id: number;
+  company: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -91,6 +102,7 @@ export interface UserSettings {
   address2: string;
   city: string;
   state: string;
+  zip: string;
   phone: string;
   venmo: string;
   cashapp: string;

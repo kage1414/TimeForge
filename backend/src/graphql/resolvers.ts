@@ -92,7 +92,7 @@ export const resolvers = {
     invoice: async (_: any, { id }: { id: number }) => {
       const invoice = await db('invoices')
         .join('clients', 'invoices.client_id', 'clients.id')
-        .select('invoices.*', 'clients.name as client_name', 'clients.email as client_email', 'clients.address as client_address')
+        .select('invoices.*', 'clients.name as client_name', 'clients.company as client_company', 'clients.email as client_email', 'clients.address1 as client_address1', 'clients.address2 as client_address2', 'clients.city as client_city', 'clients.state as client_state', 'clients.zip as client_zip')
         .where('invoices.id', id)
         .first();
       if (!invoice) return null;
@@ -340,9 +340,10 @@ export const resolvers = {
           const rate = entry.rate_override ?? entry.default_rate;
           const hours = (entry.duration_minutes || 0) / 60;
           const amount = hours * rate;
+          const entryDate = new Date(entry.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
           await db('invoice_line_items').insert({
             invoice_id: invoice.id,
-            description: `${entry.project_name}: ${entry.description || 'Time entry'}`,
+            description: `${entry.project_name} - ${entryDate}${entry.description ? '\n' + entry.description : ''}`,
             quantity: parseFloat(hours.toFixed(2)),
             rate,
             amount: parseFloat(amount.toFixed(2)),

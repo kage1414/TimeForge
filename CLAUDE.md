@@ -48,7 +48,7 @@ Full-stack invoicing and time-tracking application.
 ```
 
 ## Database Schema
-- **clients**: id, name, email, address, phone
+- **clients**: id, name, email, address1, address2, city, state, phone
 - **projects**: id, client_id, name, description, default_rate, is_active
 - **time_entries**: id, project_id, description, start_time, end_time, duration_minutes, is_billable, invoice_id, rate_override
 - **invoices**: id, client_id, invoice_number, status (draft/sent/paid/overdue/cancelled), issue_date, due_date, subtotal, tax_rate, tax_amount, credits_applied, total, notes

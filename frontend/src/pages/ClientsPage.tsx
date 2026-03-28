@@ -5,7 +5,7 @@ import { gql } from '../api/client';
 import { Client } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
 
-const CLIENTS_QUERY = `query { clients { id name email address phone created_at updated_at } }`;
+const CLIENTS_QUERY = `query { clients { id name company email address1 address2 city state zip phone created_at updated_at } }`;
 
 export default function ClientsPage() {
   const qc = useQueryClient();
@@ -19,12 +19,13 @@ export default function ClientsPage() {
 
   const save = useMutation({
     mutationFn: (c: Partial<Client>) => {
+      const input = { name: c.name, company: c.company || null, email: c.email || null, address1: c.address1 || null, address2: c.address2 || null, city: c.city || null, state: c.state || null, zip: c.zip || null, phone: c.phone || null };
       if (c.id) {
         return gql(`mutation($id: Int!, $input: UpdateClientInput!) { updateClient(id: $id, input: $input) { id } }`,
-          { id: c.id, input: { name: c.name, email: c.email, address: c.address, phone: c.phone } });
+          { id: c.id, input });
       }
       return gql(`mutation($input: CreateClientInput!) { createClient(input: $input) { id } }`,
-        { input: { name: c.name, email: c.email, address: c.address, phone: c.phone } });
+        { input });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] });
@@ -50,7 +51,7 @@ export default function ClientsPage() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Clients</h1>
         <button
-          onClick={() => setEditing({ name: '', email: '', address: '', phone: '' })}
+          onClick={() => setEditing({ name: '', company: '', email: '', address1: '', address2: '', city: '', state: '', zip: '', phone: '' })}
           className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
         >
           Add Client
@@ -59,18 +60,55 @@ export default function ClientsPage() {
 
       {editing && (
         <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <h2 className="font-semibold mb-3">{editing.id ? 'Edit' : 'New'} Client</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input className="border rounded px-3 py-2" placeholder="Name *" value={editing.name || ''}
-              onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-            <input className="border rounded px-3 py-2" placeholder="Email" value={editing.email || ''}
-              onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
-            <input className="border rounded px-3 py-2" placeholder="Phone" value={editing.phone || ''}
-              onChange={(e) => setEditing({ ...editing, phone: e.target.value })} />
-            <input className="border rounded px-3 py-2" placeholder="Address" value={editing.address || ''}
-              onChange={(e) => setEditing({ ...editing, address: e.target.value })} />
+          <h2 className="font-semibold mb-4">{editing.id ? 'Edit' : 'New'} Client</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+              <input className="border rounded p-2 w-full" value={editing.name || ''}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+              <input className="border rounded p-2 w-full" value={editing.company || ''}
+                onChange={(e) => setEditing({ ...editing, company: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input className="border rounded p-2 w-full" type="email" value={editing.email || ''}
+                onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input className="border rounded p-2 w-full" value={editing.phone || ''}
+                onChange={(e) => setEditing({ ...editing, phone: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
+              <input className="border rounded p-2 w-full" value={editing.address1 || ''}
+                onChange={(e) => setEditing({ ...editing, address1: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
+              <input className="border rounded p-2 w-full" value={editing.address2 || ''}
+                onChange={(e) => setEditing({ ...editing, address2: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+              <input className="border rounded p-2 w-full" value={editing.city || ''}
+                onChange={(e) => setEditing({ ...editing, city: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+              <input className="border rounded p-2 w-full" value={editing.state || ''}
+                onChange={(e) => setEditing({ ...editing, state: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Zip</label>
+              <input className="border rounded p-2 w-full" value={editing.zip || ''}
+                onChange={(e) => setEditing({ ...editing, zip: e.target.value })} />
+            </div>
           </div>
-          <div className="flex gap-2 mt-3">
+          <div className="flex gap-2 mt-4">
             <button onClick={() => save.mutate(editing)}
               className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Save</button>
             <button onClick={() => setEditing(null)}
