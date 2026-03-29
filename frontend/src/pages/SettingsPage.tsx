@@ -5,7 +5,7 @@ import { gql } from '../api/client';
 import { UserSettings, User } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
-const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days';
+const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name';
 
 const SETTINGS_QUERY = `query { userSettings { ${SETTINGS_FIELDS} } }`;
 
@@ -35,6 +35,13 @@ export default function SettingsPage() {
   const [paypal, setPaypal] = useState('');
   const [zelle, setZelle] = useState('');
   const [defaultDueDays, setDefaultDueDays] = useState('30');
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpUser, setSmtpUser] = useState('');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpSecure, setSmtpSecure] = useState(true);
+  const [smtpFromEmail, setSmtpFromEmail] = useState('');
+  const [smtpFromName, setSmtpFromName] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -67,6 +74,13 @@ export default function SettingsPage() {
       setPaypal(settings.paypal || '');
       setZelle(settings.zelle || '');
       setDefaultDueDays(String(settings.default_due_days ?? 30));
+      setSmtpHost(settings.smtp_host || '');
+      setSmtpPort(String(settings.smtp_port || 587));
+      setSmtpUser(settings.smtp_user || '');
+      setSmtpPass(settings.smtp_pass || '');
+      setSmtpSecure(settings.smtp_secure ?? true);
+      setSmtpFromEmail(settings.smtp_from_email || '');
+      setSmtpFromName(settings.smtp_from_name || '');
     }
   }, [settings]);
 
@@ -89,6 +103,13 @@ export default function SettingsPage() {
           paypal: paypal || null,
           zelle: zelle || null,
           default_due_days: defaultDueDays ? Number(defaultDueDays) : null,
+          smtp_host: smtpHost || null,
+          smtp_port: smtpPort ? Number(smtpPort) : null,
+          smtp_user: smtpUser || null,
+          smtp_pass: smtpPass || null,
+          smtp_secure: smtpSecure,
+          smtp_from_email: smtpFromEmail || null,
+          smtp_from_name: smtpFromName || null,
         },
       }),
     onSuccess: () => {
@@ -216,6 +237,50 @@ export default function SettingsPage() {
               <input className="border rounded p-2 w-full" type="number" min="0" value={defaultDueDays}
                 onChange={(e) => setDefaultDueDays(e.target.value)} />
               <p className="text-xs text-gray-400 mt-1">Set to 0 for "Upon Receipt"</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold">Email (SMTP)</h2>
+            <button type="button" onClick={() => {
+              setSmtpHost('smtp.gmail.com');
+              setSmtpPort('587');
+              setSmtpSecure(false);
+            }} className="text-sm text-indigo-600 hover:underline">
+              Use Gmail
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mb-4">Configure SMTP to send invoices by email. For Gmail, use an App Password (Google Account &rarr; Security &rarr; App Passwords).</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
+              <input className="border rounded p-2 w-full" placeholder="smtp.gmail.com" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Port</label>
+              <input className="border rounded p-2 w-full" type="number" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Username / Email</label>
+              <input className="border rounded p-2 w-full" placeholder="you@gmail.com" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password / App Password</label>
+              <input className="border rounded p-2 w-full" type="password" placeholder="App Password" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">From Name</label>
+              <input className="border rounded p-2 w-full" placeholder="Your Name" value={smtpFromName} onChange={(e) => setSmtpFromName(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">From Email</label>
+              <input className="border rounded p-2 w-full" placeholder="you@gmail.com" value={smtpFromEmail} onChange={(e) => setSmtpFromEmail(e.target.value)} />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input type="checkbox" id="smtpSecure" checked={smtpSecure} onChange={(e) => setSmtpSecure(e.target.checked)} />
+              <label htmlFor="smtpSecure" className="text-sm text-gray-700">Use SSL/TLS (port 465). Uncheck for STARTTLS (port 587).</label>
             </div>
           </div>
         </div>

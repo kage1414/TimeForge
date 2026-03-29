@@ -42,6 +42,8 @@ export default function InvoiceDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendTo, setSendTo] = useState('');
 
   const { data: invoice, isLoading } = useQuery<Invoice>({
     queryKey: ['invoice', id],
@@ -61,6 +63,18 @@ export default function InvoiceDetailPage() {
       qc.invalidateQueries({ queryKey: ['invoice', id] });
       qc.invalidateQueries({ queryKey: ['invoices'] });
       toast.success('Status updated');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const sendInvoice = useMutation({
+    mutationFn: (to: string) =>
+      gql(`mutation($id: Int!, $to: String!) { sendInvoice(id: $id, to: $to) }`, { id: Number(id), to }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['invoice', id] });
+      qc.invalidateQueries({ queryKey: ['invoices'] });
+      toast.success('Invoice sent');
+      setShowSendModal(false);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -223,6 +237,8 @@ export default function InvoiceDetailPage() {
           <h1 className="text-2xl font-bold mt-1">Invoice {invoice.invoice_number}</h1>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => { setSendTo(invoice.client_email || ''); setShowSendModal(true); }}
+            className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700">Send Email</button>
           <button onClick={exportPdf}
             className="bg-gray-600 text-white px-3 py-2 rounded text-sm hover:bg-gray-700">Export PDF</button>
           <button onClick={exportCsv}
@@ -342,6 +358,28 @@ export default function InvoiceDetailPage() {
         onConfirm={() => { setShowDeleteConfirm(false); deleteInvoice.mutate(); }}
         onCancel={() => setShowDeleteConfirm(false)}
       />
+
+      {showSendModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowSendModal(false)}>
+          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold mb-4">Send Invoice #{invoice.invoice_number}</h2>
+            <form onSubmit={(e) => { e.preventDefault(); sendInvoice.mutate(sendTo); }}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Recipient Email</label>
+              <input type="email" required className="border rounded p-2 w-full mb-4" value={sendTo}
+                onChange={(e) => setSendTo(e.target.value)} placeholder="client@example.com" />
+              <p className="text-xs text-gray-400 mb-4">The invoice will be sent as a formatted HTML email. Draft invoices will be marked as "sent" automatically.</p>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setShowSendModal(false)}
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded">Cancel</button>
+                <button type="submit" disabled={sendInvoice.isPending}
+                  className="bg-green-600 text-white px-4 py-2 text-sm rounded hover:bg-green-700 disabled:opacity-50">
+                  {sendInvoice.isPending ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
