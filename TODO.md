@@ -2,8 +2,6 @@
 
 ## 🔥 In Progress
 
-- [ ] There is a frontend error
-
 ## 🧠 Backlog
 
 - [ ] Fix favicon not scaling correctly, or not being referenced correctly. It should use the file favicon.png in the public folder

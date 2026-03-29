@@ -1,15 +1,43 @@
 # TimeForge
 
+# Claude Operating Instructions
+
+You are responsible for maintaining project state.
+
+ALWAYS do the following on every meaningful response:
+
+1. Update TODOS.md
+
+- Move completed items to Done
+- Add new tasks if discovered
+- Break large tasks into smaller ones
+- Commit completed items before moving to the next.
+
+2. Update CLAUDE.md
+   - Add any new architectural decisions
+   - Track patterns, conventions, or constraints
+   - Keep it concise and organized
+
+3. Output BOTH updated files at the end of your response:
+   - Full updated TASKS.md
+   - Full updated CLAUDE.md
+
+4. Never skip updates, even if not explicitly asked.
+5. Treat these files as the source of truth.
+
 ## Project Overview
+
 Full-stack invoicing and time-tracking application.
 
 ## Tech Stack
+
 - **Backend**: Node.js, Express, TypeScript, Apollo Server (GraphQL), Knex (query builder/migrations), PostgreSQL
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, TanStack React Query, React Router, react-hot-toast
 - **Package Manager**: Yarn
 - **Deployment**: Docker Compose (production + dev with hot reload)
 
 ## Project Structure
+
 ```
 ├── backend/
 │   ├── src/
@@ -48,6 +76,7 @@ Full-stack invoicing and time-tracking application.
 ```
 
 ## Database Schema
+
 - **clients**: id, name, email, address1, address2, city, state, phone
 - **projects**: id, client_id, name, description, default_rate, is_active
 - **time_entries**: id, project_id, description, start_time, end_time, duration_minutes, is_billable, invoice_id, rate_override
@@ -57,6 +86,7 @@ Full-stack invoicing and time-tracking application.
 - **user_settings**: id (single row, id=1), first_name, last_name, email, address1, address2, city, state, phone, venmo, cashapp, paypal, zelle
 
 ## Key Commands
+
 ```bash
 # Backend
 cd backend && yarn install
@@ -76,9 +106,11 @@ docker-compose -f docker-compose.dev.yml up --build  # Dev with hot reload
 ```
 
 ## GraphQL API
+
 Single endpoint at `/graphql` (Apollo Server).
 
 ### Queries
+
 - `clients`, `client(id)` - Client CRUD
 - `projects(client_id, is_active)`, `project(id)` - Project CRUD
 - `timeEntries(project_id, client_id, unbilled, billed)`, `timeEntry(id)` - Time entry queries
@@ -88,6 +120,7 @@ Single endpoint at `/graphql` (Apollo Server).
 - `dashboard` - Summary stats (running timers, unbilled hours/amount, recent invoices, outstanding amount)
 
 ### Mutations
+
 - `createClient`, `updateClient`, `deleteClient`
 - `createProject`, `updateProject`, `deleteProject`
 - `createTimeEntry`, `updateTimeEntry`, `deleteTimeEntry`, `stopTimeEntry`, `restartTimeEntry`, `unbillTimeEntry`, `creditTimeEntry`
@@ -97,5 +130,6 @@ Single endpoint at `/graphql` (Apollo Server).
 - `updateUserSettings(input)` - Update user profile and payment methods
 
 ## Environment Variables
+
 - `DATABASE_URL` - PostgreSQL connection string (default: postgresql://postgres:postgres@db:5432/invoicer)
 - `PORT` - Backend port (default: 4000)
