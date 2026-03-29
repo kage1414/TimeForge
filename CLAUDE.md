@@ -6,7 +6,7 @@ You are responsible for maintaining project state.
 
 ALWAYS do the following on every meaningful response:
 
-1. Update TODOS.md
+1. Update TODO.md
 
 - Move completed items to Done
 - Add new tasks if discovered
