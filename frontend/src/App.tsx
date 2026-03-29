@@ -1,5 +1,10 @@
-import { useState, useRef, useEffect } from "react";
-import { Routes, Route, Link, useLocation } from "react-router-dom";
+import { useState, MouseEvent } from "react";
+import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  AppBar, Toolbar, Typography, Button, Box, Menu, MenuItem,
+  Container, ListItemText,
+} from "@mui/material";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import { useAuth } from "./auth/AuthContext";
 import { ProtectedRoute, AdminRoute } from "./components/ProtectedRoute";
 import DashboardPage from "./pages/DashboardPage";
@@ -14,77 +19,67 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import InvitesPage from "./pages/InvitesPage";
 
-interface NavItem {
+interface NavDropdownItem {
   path: string;
   label: string;
-  children?: NavItem[];
-  adminOnly?: boolean;
+  children: { path: string; label: string }[];
 }
 
-function NavDropdown({ item, location }: { item: NavItem; location: ReturnType<typeof useLocation> }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+function NavDropdownButton({ item, location }: { item: NavDropdownItem; location: ReturnType<typeof useLocation> }) {
+  const navigate = useNavigate();
+  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
 
   const isActive =
     location.pathname === item.path ||
     (item.path !== "/" && location.pathname.startsWith(item.path)) ||
-    item.children?.some(
-      (c) => location.pathname === c.path || location.pathname.startsWith(c.path)
-    );
+    item.children.some((c) => location.pathname === c.path || location.pathname.startsWith(c.path));
+
+  const handleOpen = (e: MouseEvent<HTMLElement>) => setAnchor(e.currentTarget);
+  const handleClose = () => setAnchor(null);
 
   return (
-    <div ref={ref} className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <Link
-        to={item.path}
-        className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-          isActive
-            ? "bg-indigo-100 text-indigo-700"
-            : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-        }`}
+    <>
+      <Button
+        color="inherit"
+        onClick={() => navigate(item.path)}
+        onMouseEnter={handleOpen}
+        endIcon={<ArrowDropDownIcon />}
+        sx={{
+          bgcolor: isActive ? "rgba(255,255,255,0.15)" : "transparent",
+          "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
+        }}
       >
         {item.label}
-        <svg className="inline ml-1 w-3 h-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </Link>
-      {open && (
-        <div className="absolute top-full left-0 mt-0 pt-1 z-50">
-          <div className="bg-white rounded-md shadow-lg border py-1 min-w-[160px]">
-            {item.children!.map((child) => (
-              <Link
-                key={child.path}
-                to={child.path}
-                onClick={() => setOpen(false)}
-                className={`block px-4 py-2 text-sm transition-colors ${
-                  location.pathname === child.path || location.pathname.startsWith(child.path)
-                    ? "bg-indigo-50 text-indigo-700"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                {child.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+      </Button>
+      <Menu
+        anchorEl={anchor}
+        open={Boolean(anchor)}
+        onClose={handleClose}
+        slotProps={{ list: { onMouseLeave: handleClose } }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        disableAutoFocusItem
+      >
+        {item.children.map((child) => (
+          <MenuItem
+            key={child.path}
+            selected={location.pathname === child.path || location.pathname.startsWith(child.path)}
+            onClick={() => { navigate(child.path); handleClose(); }}
+          >
+            <ListItemText>{child.label}</ListItemText>
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
   );
 }
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, isAdmin, logout } = useAuth();
 
-  const isAuthPage =
-    location.pathname === "/login" || location.pathname === "/signup";
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/signup";
 
   if (isAuthPage) {
     return (
@@ -95,68 +90,72 @@ export default function App() {
     );
   }
 
-  const navItems: NavItem[] = [
-    { path: "/", label: "Dashboard" },
-    {
-      path: "/clients",
-      label: "Clients",
-      children: [{ path: "/projects", label: "Projects" }],
-    },
-    {
-      path: "/time",
-      label: "Time Tracking",
-      children: [{ path: "/invoices", label: "Invoices" }],
-    },
+  const dropdownItems: NavDropdownItem[] = [
+    { path: "/clients", label: "Clients", children: [{ path: "/projects", label: "Projects" }] },
+    { path: "/time", label: "Time Tracking", children: [{ path: "/invoices", label: "Invoices" }] },
     {
       path: "/settings",
       label: "Settings",
-      children: isAdmin ? [{ path: "/admin/invites", label: "Invites" }] : undefined,
+      children: isAdmin ? [{ path: "/admin/invites", label: "Invites" }] : [],
     },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            <Link to="/" className="flex items-center space-x-2">
-              <img src="/logo.png" alt="TimeForge" className="h-8" />
-              <span className="text-xl font-bold text-indigo-600">
-                TimeForge
-              </span>
-            </Link>
-            <div className="flex items-center space-x-1">
-              {navItems.map((item) =>
-                item.children ? (
-                  <NavDropdown key={item.path} item={item} location={location} />
-                ) : (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      location.pathname === item.path
-                        ? "bg-indigo-100 text-indigo-700"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                )
-              )}
-              {user && (
-                <button
-                  onClick={logout}
-                  className="ml-4 px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-gray-900 hover:bg-gray-100"
-                >
-                  Logout
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <AppBar position="static">
+        <Toolbar>
+          <Box
+            component={Link}
+            to="/"
+            sx={{ display: "flex", alignItems: "center", gap: 1, textDecoration: "none", color: "inherit", mr: 3 }}
+          >
+            <img src="/logo.png" alt="TimeForge" style={{ height: 32 }} />
+            <Typography variant="h6" fontWeight="bold">TimeForge</Typography>
+          </Box>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
+          <Button
+            color="inherit"
+            onClick={() => navigate("/")}
+            sx={{
+              bgcolor: location.pathname === "/" ? "rgba(255,255,255,0.15)" : "transparent",
+              "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
+            }}
+          >
+            Dashboard
+          </Button>
+
+          {dropdownItems.map((item) =>
+            item.children.length > 0 ? (
+              <NavDropdownButton key={item.path} item={item} location={location} />
+            ) : (
+              <Button
+                key={item.path}
+                color="inherit"
+                onClick={() => navigate(item.path)}
+                sx={{
+                  bgcolor:
+                    location.pathname === item.path || location.pathname.startsWith(item.path)
+                      ? "rgba(255,255,255,0.15)"
+                      : "transparent",
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
+                }}
+              >
+                {item.label}
+              </Button>
+            )
+          )}
+
+          <Box sx={{ flexGrow: 1 }} />
+
+          {user && (
+            <Button color="inherit" onClick={logout} sx={{ "&:hover": { bgcolor: "rgba(255,255,255,0.1)" } }}>
+              Logout
+            </Button>
+          )}
+        </Toolbar>
+      </AppBar>
+
+      <Container maxWidth="lg" sx={{ py: 4 }}>
         <Routes>
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<DashboardPage />} />
@@ -172,7 +171,7 @@ export default function App() {
             </Route>
           </Route>
         </Routes>
-      </main>
-    </div>
+      </Container>
+    </Box>
   );
 }

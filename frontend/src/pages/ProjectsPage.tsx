@@ -1,19 +1,19 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
-import { gql } from "../api/client";
-import { Project, Client } from "../types";
-import ConfirmModal from "../components/ConfirmModal";
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { gql } from '../api/client';
+import { Project, Client } from '../types';
+import ConfirmModal from '../components/ConfirmModal';
+import {
+  Typography, Button, Card, CardContent, Grid, TextField, MenuItem,
+  Table, TableHead, TableRow, TableCell, TableBody, Chip, Box, CircularProgress,
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 
 const PROJECTS_QUERY = `query { projects { id client_id client_name name description default_rate is_active created_at updated_at } }`;
 const CLIENTS_QUERY = `query { clients { id name } }`;
 
-const emptyProject = {
-  client_id: "",
-  name: "",
-  description: "",
-  default_rate: "85",
-};
+const emptyProject = { client_id: '', name: '', description: '', default_rate: '85' };
 
 export default function ProjectsPage() {
   const qc = useQueryClient();
@@ -23,191 +23,119 @@ export default function ProjectsPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
-    queryKey: ["projects"],
+    queryKey: ['projects'],
     queryFn: async () => (await gql<{ projects: Project[] }>(PROJECTS_QUERY)).projects,
   });
 
   const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["clients"],
+    queryKey: ['clients'],
     queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
   const save = useMutation({
     mutationFn: () => {
-      const body = {
-        client_id: Number(form.client_id),
-        name: form.name,
-        description: form.description,
-        default_rate: Number(form.default_rate),
-      };
-      if (editingId) {
-        return gql(`mutation($id: Int!, $input: UpdateProjectInput!) { updateProject(id: $id, input: $input) { id } }`,
-          { id: editingId, input: body });
-      }
-      return gql(`mutation($input: CreateProjectInput!) { createProject(input: $input) { id } }`,
-        { input: body });
+      const body = { client_id: Number(form.client_id), name: form.name, description: form.description, default_rate: Number(form.default_rate) };
+      if (editingId) return gql(`mutation($id: Int!, $input: UpdateProjectInput!) { updateProject(id: $id, input: $input) { id } }`, { id: editingId, input: body });
+      return gql(`mutation($input: CreateProjectInput!) { createProject(input: $input) { id } }`, { input: body });
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success(editingId ? "Project updated" : "Project created");
-      resetForm();
-    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['projects'] }); toast.success(editingId ? 'Project updated' : 'Project created'); resetForm(); },
     onError: (e: Error) => toast.error(e.message),
   });
 
   const remove = useMutation({
-    mutationFn: (id: number) =>
-      gql(`mutation($id: Int!) { deleteProject(id: $id) }`, { id }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Project deleted");
-    },
+    mutationFn: (id: number) => gql(`mutation($id: Int!) { deleteProject(id: $id) }`, { id }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['projects'] }); toast.success('Project deleted'); },
   });
 
-  function resetForm() {
-    setForm(emptyProject);
-    setEditingId(null);
-    setShowForm(false);
-  }
+  function resetForm() { setForm(emptyProject); setEditingId(null); setShowForm(false); }
 
   function startEdit(p: Project) {
-    setForm({
-      client_id: String(p.client_id),
-      name: p.name,
-      description: p.description || "",
-      default_rate: String(p.default_rate),
-    });
+    setForm({ client_id: String(p.client_id), name: p.name, description: p.description || '', default_rate: String(p.default_rate) });
     setEditingId(p.id);
     setShowForm(true);
   }
 
+  if (isLoading) return <Box sx={{ textAlign: 'center', py: 6 }}><CircularProgress /></Box>;
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Projects</h1>
-        <button
-          onClick={() => {
-            resetForm();
-            setShowForm(!showForm);
-          }}
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-        >
-          {showForm ? "Cancel" : "Add Project"}
-        </button>
-      </div>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5" fontWeight="bold">Projects</Typography>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { resetForm(); setShowForm(!showForm); }}>
+          {showForm ? 'Cancel' : 'Add Project'}
+        </Button>
+      </Box>
 
       {showForm && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            save.mutate();
-          }}
-          className="bg-white rounded-lg shadow p-4 mb-6 grid grid-cols-1 md:grid-cols-2 gap-4"
-        >
-          <select
-            className="border rounded p-2"
-            required
-            value={form.client_id}
-            onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-          >
-            <option value="">Select Client *</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <input
-            className="border rounded p-2"
-            placeholder="Project Name *"
-            required
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-          <input
-            className="border rounded p-2"
-            placeholder="Default Rate ($/hr)"
-            type="number"
-            step="1"
-            value={form.default_rate}
-            onChange={(e) => setForm({ ...form, default_rate: e.target.value })}
-          />
-          <input
-            className="border rounded p-2"
-            placeholder="Description"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-            >
-              {editingId ? "Update" : "Create"}
-            </button>
-          </div>
-        </form>
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField select fullWidth label="Client *" required value={form.client_id}
+                    onChange={(e) => setForm({ ...form, client_id: e.target.value })}>
+                    <MenuItem value="">Select Client</MenuItem>
+                    {clients.map((c) => <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>)}
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField fullWidth label="Project Name *" required value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField fullWidth label="Default Rate ($/hr)" type="number" value={form.default_rate}
+                    onChange={(e) => setForm({ ...form, default_rate: e.target.value })} />
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <TextField fullWidth label="Description" value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                </Grid>
+              </Grid>
+              <Box sx={{ mt: 2 }}>
+                <Button type="submit" variant="contained">{editingId ? 'Update' : 'Create'}</Button>
+              </Box>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
-      {isLoading ? (
-        <p className="text-center py-12">Loading...</p>
-      ) : projects.length === 0 ? (
-        <p className="text-gray-500 text-center py-12">No projects yet.</p>
+      {projects.length === 0 ? (
+        <Typography color="text.secondary" sx={{ textAlign: 'center', py: 6 }}>No projects yet.</Typography>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3">Project</th>
-                <th className="text-left p-3">Client</th>
-                <th className="text-left p-3">Rate</th>
-                <th className="text-left p-3">Status</th>
-                <th className="text-right p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell><strong>Project</strong></TableCell>
+                <TableCell><strong>Client</strong></TableCell>
+                <TableCell><strong>Rate</strong></TableCell>
+                <TableCell><strong>Status</strong></TableCell>
+                <TableCell align="right"><strong>Actions</strong></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
               {projects.map((p) => (
-                <tr key={p.id} className="border-t hover:bg-gray-50">
-                  <td className="p-3 font-medium">{p.name}</td>
-                  <td className="p-3">{p.client_name}</td>
-                  <td className="p-3">
-                    ${Number(p.default_rate).toFixed(2)}/hr
-                  </td>
-                  <td className="p-3">
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-medium ${p.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}
-                    >
-                      {p.is_active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="p-3 text-right space-x-2">
-                    <button
-                      onClick={() => startEdit(p)}
-                      className="text-indigo-600 hover:underline"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(p.id)}
-                      className="text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                <TableRow key={p.id} hover>
+                  <TableCell sx={{ fontWeight: 500 }}>{p.name}</TableCell>
+                  <TableCell>{p.client_name}</TableCell>
+                  <TableCell>${Number(p.default_rate).toFixed(2)}/hr</TableCell>
+                  <TableCell>
+                    <Chip label={p.is_active ? 'Active' : 'Inactive'} color={p.is_active ? 'success' : 'default'} size="small" />
+                  </TableCell>
+                  <TableCell align="right">
+                    <Button size="small" onClick={() => startEdit(p)}>Edit</Button>
+                    <Button size="small" color="error" onClick={() => setConfirmDeleteId(p.id)}>Delete</Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
-      <ConfirmModal
-        open={confirmDeleteId !== null}
-        message="Delete this project?"
-        confirmLabel="Delete"
+      <ConfirmModal open={confirmDeleteId !== null} message="Delete this project?" confirmLabel="Delete"
         onConfirm={() => { if (confirmDeleteId !== null) remove.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
-        onCancel={() => setConfirmDeleteId(null)}
-      />
+        onCancel={() => setConfirmDeleteId(null)} />
     </div>
   );
 }

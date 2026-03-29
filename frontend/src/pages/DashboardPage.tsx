@@ -2,6 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { gql } from '../api/client';
 import { Dashboard } from '../types';
 import { Link } from 'react-router-dom';
+import {
+  Typography, Card, CardContent, Grid, Table, TableHead, TableRow,
+  TableCell, TableBody, Chip, Box, CircularProgress,
+} from '@mui/material';
 
 const DASHBOARD_QUERY = `
   query {
@@ -17,102 +21,103 @@ const DASHBOARD_QUERY = `
   }
 `;
 
+const statusColors: Record<string, 'default' | 'info' | 'success' | 'error' | 'warning'> = {
+  draft: 'default',
+  sent: 'info',
+  paid: 'success',
+  overdue: 'error',
+  cancelled: 'warning',
+};
+
 export default function DashboardPage() {
   const { data, isLoading } = useQuery<Dashboard>({
     queryKey: ['dashboard'],
-    queryFn: async () => {
-      const res = await gql<{ dashboard: Dashboard }>(DASHBOARD_QUERY);
-      return res.dashboard;
-    },
+    queryFn: async () => (await gql<{ dashboard: Dashboard }>(DASHBOARD_QUERY)).dashboard,
     refetchInterval: 30000,
   });
 
-  if (isLoading) return <div className="text-center py-12">Loading...</div>;
+  if (isLoading) return <Box sx={{ textAlign: 'center', py: 6 }}><CircularProgress /></Box>;
   if (!data) return null;
 
-  const statusColors: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-800',
-    sent: 'bg-blue-100 text-blue-800',
-    paid: 'bg-green-100 text-green-800',
-    overdue: 'bg-red-100 text-red-800',
-    cancelled: 'bg-yellow-100 text-yellow-800',
-  };
+  const stats = [
+    { label: 'Clients', value: data.total_clients },
+    { label: 'Active Projects', value: data.active_projects },
+    { label: 'Unbilled Hours', value: data.unbilled_hours },
+    { label: 'Unbilled Amount', value: `$${data.unbilled_amount.toFixed(2)}` },
+    { label: 'Outstanding', value: `$${data.outstanding_amount.toFixed(2)}` },
+    { label: 'Running Timers', value: data.running_timers.length },
+  ];
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+      <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>Dashboard</Typography>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Clients" value={data.total_clients} />
-        <StatCard label="Active Projects" value={data.active_projects} />
-        <StatCard label="Unbilled Hours" value={data.unbilled_hours} />
-        <StatCard label="Unbilled Amount" value={`$${data.unbilled_amount.toFixed(2)}`} />
-        <StatCard label="Outstanding" value={`$${data.outstanding_amount.toFixed(2)}`} />
-        <StatCard label="Running Timers" value={data.running_timers.length} />
-      </div>
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        {stats.map((s) => (
+          <Grid key={s.label} size={{ xs: 6, sm: 4, md: 2 }}>
+            <Card>
+              <CardContent>
+                <Typography variant="body2" color="text.secondary">{s.label}</Typography>
+                <Typography variant="h5" fontWeight="bold" sx={{ mt: 0.5 }}>{s.value}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
 
       {data.running_timers.length > 0 && (
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <h2 className="text-lg font-semibold mb-3">Running Timers</h2>
-          {data.running_timers.map((t) => (
-            <div key={t.id} className="flex justify-between items-center py-2 border-b last:border-0">
-              <div>
-                <span className="font-medium">{t.project_name}</span>
-                {t.description && <span className="text-gray-500 ml-2">- {t.description}</span>}
-              </div>
-              <span className="text-green-600 font-mono text-sm animate-pulse">Running</span>
-            </div>
-          ))}
-        </div>
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Typography variant="h6" sx={{ mb: 2 }}>Running Timers</Typography>
+            {data.running_timers.map((t) => (
+              <Box key={t.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 1, borderBottom: '1px solid', borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}>
+                <div>
+                  <Typography component="span" fontWeight="medium">{t.project_name}</Typography>
+                  {t.description && <Typography component="span" color="text.secondary" sx={{ ml: 1 }}>- {t.description}</Typography>}
+                </div>
+                <Chip label="Running" color="success" size="small" variant="outlined" />
+              </Box>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="flex justify-between items-center mb-3">
-          <h2 className="text-lg font-semibold">Recent Invoices</h2>
-          <Link to="/invoices" className="text-indigo-600 text-sm hover:underline">View all</Link>
-        </div>
-        {data.recent_invoices.length === 0 ? (
-          <p className="text-gray-500">No invoices yet</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b">
-                <th className="pb-2">Number</th>
-                <th className="pb-2">Client</th>
-                <th className="pb-2">Total</th>
-                <th className="pb-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.recent_invoices.map((inv) => (
-                <tr key={inv.id} className="border-b last:border-0">
-                  <td className="py-2">
-                    <Link to={`/invoices/${inv.id}`} className="text-indigo-600 hover:underline">
-                      {inv.invoice_number}
-                    </Link>
-                  </td>
-                  <td className="py-2">{inv.client_name}</td>
-                  <td className="py-2">${Number(inv.total).toFixed(2)}</td>
-                  <td className="py-2">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[inv.status]}`}>
-                      {inv.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="bg-white rounded-lg shadow p-4">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
+      <Card>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">Recent Invoices</Typography>
+            <Link to="/invoices" style={{ color: '#4f46e5', fontSize: 14 }}>View all</Link>
+          </Box>
+          {data.recent_invoices.length === 0 ? (
+            <Typography color="text.secondary">No invoices yet</Typography>
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Number</TableCell>
+                  <TableCell>Client</TableCell>
+                  <TableCell>Total</TableCell>
+                  <TableCell>Status</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data.recent_invoices.map((inv) => (
+                  <TableRow key={inv.id} hover>
+                    <TableCell>
+                      <Link to={`/invoices/${inv.id}`} style={{ color: '#4f46e5' }}>{inv.invoice_number}</Link>
+                    </TableCell>
+                    <TableCell>{inv.client_name}</TableCell>
+                    <TableCell>${Number(inv.total).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <Chip label={inv.status} color={statusColors[inv.status] || 'default'} size="small" />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

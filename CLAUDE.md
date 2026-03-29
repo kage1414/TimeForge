@@ -10,6 +10,7 @@ ALWAYS do the following on every meaningful response:
 
 - Move completed items to Done
 - Add new tasks if discovered
+- Add sub-tasks when you create them, that way if you run out of budget you can refer back to what you were working on
 - Break large tasks into smaller ones
 - Commit completed items before moving to the next.
 
