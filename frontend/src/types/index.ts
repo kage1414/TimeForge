@@ -108,7 +108,33 @@ export interface UserSettings {
   cashapp: string;
   paypal: string;
   zelle: string;
+  default_due_days: number | null;
   updated_at: string;
+}
+
+export interface User {
+  id: number;
+  email: string;
+  name: string | null;
+  role: 'user' | 'admin';
+  created_at: string;
+}
+
+export interface AuthPayload {
+  token: string;
+  user: User;
+}
+
+export interface Invite {
+  id: number;
+  token: string;
+  email: string | null;
+  created_by: number;
+  creator_name: string | null;
+  used_by: number | null;
+  used_at: string | null;
+  expires_at: string;
+  created_at: string;
 }
 
 export interface Dashboard {

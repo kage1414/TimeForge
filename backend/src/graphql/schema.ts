@@ -120,6 +120,7 @@ export const typeDefs = `#graphql
     cashapp: String
     paypal: String
     zelle: String
+    default_due_days: Int
     updated_at: String!
   }
 
@@ -138,9 +139,53 @@ export const typeDefs = `#graphql
     cashapp: String
     paypal: String
     zelle: String
+    default_due_days: Int
+  }
+
+  type User {
+    id: Int!
+    email: String!
+    name: String
+    role: String!
+    created_at: String!
+  }
+
+  type AuthPayload {
+    token: String!
+    user: User!
+  }
+
+  type Invite {
+    id: Int!
+    token: String!
+    email: String
+    created_by: Int!
+    creator_name: String
+    used_by: Int
+    used_at: String
+    expires_at: String!
+    created_at: String!
+  }
+
+  input LoginInput {
+    email: String!
+    password: String!
+  }
+
+  input SignupInput {
+    email: String!
+    password: String!
+    name: String
+    invite_token: String!
+  }
+
+  input CreateInviteInput {
+    email: String
+    expires_in_days: Int
   }
 
   type Query {
+    me: User
     clients: [Client!]!
     client(id: Int!): Client
     projects(client_id: Int, is_active: Boolean): [Project!]!
@@ -150,8 +195,10 @@ export const typeDefs = `#graphql
     invoices(client_id: Int, status: String): [Invoice!]!
     invoice(id: Int!): Invoice
     credits(client_id: Int, available: Boolean): [Credit!]!
+    users: [User!]!
     userSettings: UserSettings!
     dashboard: Dashboard!
+    invites: [Invite!]!
   }
 
   input CreateClientInput {
@@ -215,6 +262,7 @@ export const typeDefs = `#graphql
 
   input CreateInvoiceInput {
     client_id: Int!
+    invoice_number: String
     issue_date: String
     due_date: String
     tax_rate: Float
@@ -232,6 +280,12 @@ export const typeDefs = `#graphql
   }
 
   type Mutation {
+    login(input: LoginInput!): AuthPayload!
+    signup(input: SignupInput!): AuthPayload!
+    createInvite(input: CreateInviteInput): Invite!
+    deleteInvite(id: Int!): Boolean!
+    updateUserRole(id: Int!, role: String!): User!
+    changePassword(currentPassword: String!, newPassword: String!): Boolean!
     createClient(input: CreateClientInput!): Client!
     updateClient(id: Int!, input: UpdateClientInput!): Client!
     deleteClient(id: Int!): Boolean!

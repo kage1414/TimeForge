@@ -9,7 +9,11 @@
       "Bash(node -e \"const p = require\\(''./node_modules/@apollo/server/package.json''\\); console.log\\(p.version\\); console.log\\(Object.keys\\(p.exports || {}\\).filter\\(k => k.includes\\(''express''\\)\\).join\\(''\\\\n''\\)\\)\")",
       "Bash(node -e \"const p = require\\(''./node_modules/@apollo/server/package.json''\\); console.log\\(JSON.stringify\\(Object.keys\\(p.exports || {}\\), null, 2\\)\\)\")",
       "Bash(yarn migrate:*)",
-      "Bash(docker-compose exec:*)"
+      "Bash(docker-compose exec:*)",
+      "Bash(docker-compose logs:*)",
+      "Bash(docker-compose -f docker-compose.dev.yml logs --tail=50 backend)",
+      "Bash(docker-compose -f docker-compose.dev.yml up --build -d)",
+      "Bash(docker-compose -f docker-compose.dev.yml logs --tail=20 backend)"
     ]
   }
 }

@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { gql } from '../api/client';
-import { Client, TimeEntry } from '../types';
+import { Client, TimeEntry, UserSettings } from '../types';
 
 type EntryAction = 'bill' | 'credit';
 
 const CLIENTS_QUERY = `query { clients { id name } }`;
+const SETTINGS_QUERY = `query { userSettings { default_due_days } }`;
 
 const UNBILLED_ENTRIES_QUERY = `
   query($client_id: Int, $unbilled: Boolean) {
@@ -31,11 +32,23 @@ export default function CreateInvoicePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [clientId, setClientId] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [taxRate, setTaxRate] = useState('0');
   const [notes, setNotes] = useState('');
-  const [dueInDays, setDueInDays] = useState('30');
+  const [dueInDays, setDueInDays] = useState('');
   const [entryActions, setEntryActions] = useState<Map<number, EntryAction>>(new Map());
   const [billedCredits, setBilledCredits] = useState<Set<number>>(new Set());
+
+  const { data: settings } = useQuery<{ default_due_days: number | null }>({
+    queryKey: ['userSettings'],
+    queryFn: async () => (await gql<{ userSettings: { default_due_days: number | null } }>(SETTINGS_QUERY)).userSettings,
+  });
+
+  useEffect(() => {
+    if (settings && dueInDays === '') {
+      setDueInDays(String(settings.default_due_days ?? 30));
+    }
+  }, [settings]);
 
   const { data: clients = [] } = useQuery<Client[]>({
     queryKey: ['clients'],
@@ -74,6 +87,7 @@ export default function CreateInvoicePage() {
         {
           input: {
             client_id: Number(clientId),
+            invoice_number: invoiceNumber || null,
             issue_date: today.toISOString().split('T')[0],
             due_date: due.toISOString().split('T')[0],
             tax_rate: Number(taxRate),
@@ -160,7 +174,7 @@ export default function CreateInvoicePage() {
       <h1 className="text-2xl font-bold mb-6 mt-1">Create Invoice</h1>
 
       <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Client *</label>
             <select className="border rounded p-2 w-full" value={clientId}
@@ -168,6 +182,11 @@ export default function CreateInvoicePage() {
               <option value="">Select Client</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Invoice #</label>
+            <input className="border rounded p-2 w-full" placeholder="Auto-generated" value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tax Rate (%)</label>

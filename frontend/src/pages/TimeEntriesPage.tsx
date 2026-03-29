@@ -80,6 +80,26 @@ const emptyEditModal: EditModalState = {
   isBillable: true,
 };
 
+interface AddModalState {
+  open: boolean;
+  projectId: string;
+  description: string;
+  rateOverride: string;
+  startTime: string;
+  endTime: string;
+  isBillable: boolean;
+}
+
+const emptyAddModal: AddModalState = {
+  open: false,
+  projectId: '',
+  description: '',
+  rateOverride: '',
+  startTime: '',
+  endTime: '',
+  isBillable: true,
+};
+
 export default function TimeEntriesPage() {
   const qc = useQueryClient();
   const [filterProject, setFilterProject] = useState('');
@@ -87,6 +107,7 @@ export default function TimeEntriesPage() {
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [startModal, setStartModal] = useState<StartModalState>(emptyStartModal);
   const [editModal, setEditModal] = useState<EditModalState>(emptyEditModal);
+  const [addModal, setAddModal] = useState<AddModalState>(emptyAddModal);
   const [restartedId, setRestartedId] = useState<number | null>(null);
 
   const { data: projects = [] } = useQuery<Project[]>({
@@ -119,6 +140,26 @@ export default function TimeEntriesPage() {
       toast.success('Timer started');
       setStartModal(emptyStartModal);
       setRestartedId(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const addEntry = useMutation({
+    mutationFn: () =>
+      gql(`mutation($input: CreateTimeEntryInput!) { createTimeEntry(input: $input) { id } }`, {
+        input: {
+          project_id: Number(addModal.projectId),
+          description: addModal.description || null,
+          start_time: new Date(addModal.startTime).toISOString(),
+          end_time: new Date(addModal.endTime).toISOString(),
+          is_billable: addModal.isBillable,
+          rate_override: addModal.rateOverride ? Number(addModal.rateOverride) : null,
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['timeEntries'] });
+      toast.success('Time entry added');
+      setAddModal(emptyAddModal);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -233,13 +274,21 @@ export default function TimeEntriesPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Time Tracking</h1>
-        <button
-          onClick={() => setStartModal({ ...emptyStartModal, open: true, startTime: toLocalDatetime(new Date().toISOString()) })}
-          disabled={hasRunning}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Start Timer
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setAddModal({ ...emptyAddModal, open: true, startTime: toLocalDatetime(new Date().toISOString()), endTime: toLocalDatetime(new Date().toISOString()) })}
+            className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+          >
+            Add Entry
+          </button>
+          <button
+            onClick={() => setStartModal({ ...emptyStartModal, open: true, startTime: toLocalDatetime(new Date().toISOString()) })}
+            disabled={hasRunning}
+            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Start Timer
+          </button>
+        </div>
       </div>
 
       {/* Running Timers */}
@@ -446,6 +495,62 @@ export default function TimeEntriesPage() {
                   className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-50">Cancel</button>
                 <button type="submit"
                   className="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Entry Modal */}
+      {addModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setAddModal(emptyAddModal)} />
+          <div className="relative bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Add Time Entry</h3>
+            <form onSubmit={(e) => { e.preventDefault(); addEntry.mutate(); }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project *</label>
+                <select className="border rounded p-2 w-full" required value={addModal.projectId}
+                  onChange={(e) => setAddModal({ ...addModal, projectId: e.target.value })}>
+                  <option value="">Select Project</option>
+                  {projects.filter((p) => p.is_active).map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.client_name})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <input className="border rounded p-2 w-full" value={addModal.description}
+                  onChange={(e) => setAddModal({ ...addModal, description: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
+                <input className="border rounded p-2 w-full" type="datetime-local" required
+                  value={addModal.startTime}
+                  onChange={(e) => setAddModal({ ...addModal, startTime: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Time *</label>
+                <input className="border rounded p-2 w-full" type="datetime-local" required
+                  value={addModal.endTime}
+                  onChange={(e) => setAddModal({ ...addModal, endTime: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rate Override ($/hr)</label>
+                <input className="border rounded p-2 w-full" type="number" step="0.01"
+                  value={addModal.rateOverride}
+                  onChange={(e) => setAddModal({ ...addModal, rateOverride: e.target.value })} />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={addModal.isBillable}
+                  onChange={(e) => setAddModal({ ...addModal, isBillable: e.target.checked })} />
+                Billable
+              </label>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setAddModal(emptyAddModal)}
+                  className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-50">Cancel</button>
+                <button type="submit"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700">Add Entry</button>
               </div>
             </form>
           </div>

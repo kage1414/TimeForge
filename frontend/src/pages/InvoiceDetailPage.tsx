@@ -131,7 +131,7 @@ export default function InvoiceDetailPage() {
       <!-- Header: user info right-aligned, INVOICE title -->
       <div style="text-align:right;margin-bottom:32px">
         <h1>INVOICE</h1>
-        ${paymentLines.length ? `<p style="margin:4px 0 16px;color:#6b7280;font-size:13px">${paymentLines.join(' &middot; ')}</p>` : '<div style="margin-bottom:16px"></div>'}
+        ${paymentLines.length ? `<div style="margin:4px 0 16px;color:#6b7280;font-size:13px">${paymentLines.map(l => `<p style="margin:2px 0">${l}</p>`).join('')}</div>` : '<div style="margin-bottom:16px"></div>'}
         ${settings?.company ? `<p style="margin:2px 0;font-weight:700;font-size:16px">${settings.company}</p>` : ''}
         ${fullName ? `<p style="margin:2px 0;font-weight:600">${fullName}</p>` : ''}
         ${settings?.address1 ? `<p style="margin:2px 0">${settings.address1}</p>` : ''}
@@ -158,7 +158,7 @@ export default function InvoiceDetailPage() {
           <table class="details-table" style="margin-left:auto">
             <tr><td style="color:#6b7280;text-align:right">Invoice Number:</td><td style="text-align:right;font-weight:500">${invoice.invoice_number}</td></tr>
             <tr><td style="color:#6b7280;text-align:right">Invoice Date:</td><td style="text-align:right">${new Date(invoice.issue_date).toLocaleDateString()}</td></tr>
-            <tr><td style="color:#6b7280;text-align:right">Payment Due:</td><td style="text-align:right">${new Date(invoice.due_date).toLocaleDateString()}</td></tr>
+            <tr><td style="color:#6b7280;text-align:right">Payment Due:</td><td style="text-align:right">${new Date(invoice.issue_date).toDateString() === new Date(invoice.due_date).toDateString() ? 'Upon Receipt' : new Date(invoice.due_date).toLocaleDateString()}</td></tr>
             <tr style="font-weight:600"><td style="padding-top:8px;text-align:right">Amount Due (USD):</td><td style="padding-top:8px;text-align:right">$${Number(invoice.total).toFixed(2)}</td></tr>
           </table>
         </div>
@@ -247,7 +247,7 @@ export default function InvoiceDetailPage() {
             <dt className="text-gray-500">Issue Date</dt>
             <dd>{new Date(invoice.issue_date).toLocaleDateString()}</dd>
             <dt className="text-gray-500">Due Date</dt>
-            <dd>{new Date(invoice.due_date).toLocaleDateString()}</dd>
+            <dd>{new Date(invoice.issue_date).toDateString() === new Date(invoice.due_date).toDateString() ? 'Upon Receipt' : new Date(invoice.due_date).toLocaleDateString()}</dd>
           </dl>
         </div>
         <div className="bg-white rounded-lg shadow p-4">

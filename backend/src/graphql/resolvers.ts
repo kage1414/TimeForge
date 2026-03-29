@@ -1,9 +1,25 @@
+import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { GraphQLError } from 'graphql';
 import db from '../db';
+import { JWT_SECRET, Context } from '../index';
 
 function toISO(val: any): string | null {
   if (!val) return null;
   if (val instanceof Date) return val.toISOString();
   return String(val);
+}
+
+function requireAuth(context: Context) {
+  if (!context.user) throw new GraphQLError('Not authenticated', { extensions: { code: 'UNAUTHENTICATED' } });
+  return context.user;
+}
+
+function requireAdmin(context: Context) {
+  const user = requireAuth(context);
+  if (user.role !== 'admin') throw new GraphQLError('Not authorized', { extensions: { code: 'FORBIDDEN' } });
+  return user;
 }
 
 export const resolvers = {
@@ -30,32 +46,56 @@ export const resolvers = {
   Credit: {
     created_at: (e: any) => toISO(e.created_at),
   },
+  User: {
+    created_at: (e: any) => toISO(e.created_at),
+  },
+  Invite: {
+    created_at: (e: any) => toISO(e.created_at),
+    expires_at: (e: any) => toISO(e.expires_at),
+    used_at: (e: any) => toISO(e.used_at),
+  },
   UserSettings: {
     updated_at: (e: any) => toISO(e.updated_at),
   },
   Query: {
-    clients: () => db('clients').orderBy('name'),
+    me: (_: any, __: any, context: Context) => {
+      if (!context.user) return null;
+      return db('users').where('id', context.user.id).select('id', 'email', 'name', 'role', 'created_at').first();
+    },
 
-    client: (_: any, { id }: { id: number }) =>
-      db('clients').where('id', id).first(),
+    clients: (_: any, __: any, context: Context) => {
+      const user = requireAuth(context);
+      return db('clients').where('user_id', user.id).orderBy('name');
+    },
 
-    projects: (_: any, { client_id, is_active }: { client_id?: number; is_active?: boolean }) => {
+    client: (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      return db('clients').where({ id, user_id: user.id }).first();
+    },
+
+    projects: (_: any, { client_id, is_active }: { client_id?: number; is_active?: boolean }, context: Context) => {
+      const user = requireAuth(context);
       let query = db('projects')
         .join('clients', 'projects.client_id', 'clients.id')
-        .select('projects.*', 'clients.name as client_name');
+        .select('projects.*', 'clients.name as client_name')
+        .where('projects.user_id', user.id);
       if (client_id) query = query.where('projects.client_id', client_id);
       if (is_active !== undefined) query = query.where('projects.is_active', is_active);
       return query.orderBy('projects.name');
     },
 
-    project: (_: any, { id }: { id: number }) =>
-      db('projects')
+    project: (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      return db('projects')
         .join('clients', 'projects.client_id', 'clients.id')
         .select('projects.*', 'clients.name as client_name')
         .where('projects.id', id)
-        .first(),
+        .where('projects.user_id', user.id)
+        .first();
+    },
 
-    timeEntries: (_: any, { project_id, client_id, unbilled, billed }: any) => {
+    timeEntries: (_: any, { project_id, client_id, unbilled, billed }: any, context: Context) => {
+      const user = requireAuth(context);
       let query = db('time_entries')
         .join('projects', 'time_entries.project_id', 'projects.id')
         .join('clients', 'projects.client_id', 'clients.id')
@@ -65,7 +105,8 @@ export const resolvers = {
           'projects.default_rate',
           'clients.name as client_name',
           'clients.id as client_id'
-        );
+        )
+        .where('time_entries.user_id', user.id);
       if (project_id) query = query.where('time_entries.project_id', project_id);
       if (unbilled) query = query.whereNull('time_entries.invoice_id').where('time_entries.is_billable', true);
       if (billed) query = query.whereNotNull('time_entries.invoice_id');
@@ -73,27 +114,34 @@ export const resolvers = {
       return query.orderBy('time_entries.start_time', 'desc');
     },
 
-    timeEntry: (_: any, { id }: { id: number }) =>
-      db('time_entries')
+    timeEntry: (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      return db('time_entries')
         .join('projects', 'time_entries.project_id', 'projects.id')
         .select('time_entries.*', 'projects.name as project_name', 'projects.default_rate')
         .where('time_entries.id', id)
-        .first(),
+        .where('time_entries.user_id', user.id)
+        .first();
+    },
 
-    invoices: (_: any, { client_id, status }: { client_id?: number; status?: string }) => {
+    invoices: (_: any, { client_id, status }: { client_id?: number; status?: string }, context: Context) => {
+      const user = requireAuth(context);
       let query = db('invoices')
         .join('clients', 'invoices.client_id', 'clients.id')
-        .select('invoices.*', 'clients.name as client_name');
+        .select('invoices.*', 'clients.name as client_name')
+        .where('invoices.user_id', user.id);
       if (client_id) query = query.where('invoices.client_id', client_id);
       if (status) query = query.where('invoices.status', status);
       return query.orderBy('invoices.created_at', 'desc');
     },
 
-    invoice: async (_: any, { id }: { id: number }) => {
+    invoice: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
       const invoice = await db('invoices')
         .join('clients', 'invoices.client_id', 'clients.id')
         .select('invoices.*', 'clients.name as client_name', 'clients.company as client_company', 'clients.email as client_email', 'clients.address1 as client_address1', 'clients.address2 as client_address2', 'clients.city as client_city', 'clients.state as client_state', 'clients.zip as client_zip')
         .where('invoices.id', id)
+        .where('invoices.user_id', user.id)
         .first();
       if (!invoice) return null;
       const line_items = await db('invoice_line_items').where('invoice_id', id).orderBy('id');
@@ -104,25 +152,43 @@ export const resolvers = {
       return { ...invoice, line_items, credits };
     },
 
-    credits: (_: any, { client_id, available }: { client_id?: number; available?: boolean }) => {
+    credits: (_: any, { client_id, available }: { client_id?: number; available?: boolean }, context: Context) => {
+      const user = requireAuth(context);
       let query = db('credits')
         .join('clients', 'credits.client_id', 'clients.id')
-        .select('credits.*', 'clients.name as client_name');
+        .select('credits.*', 'clients.name as client_name')
+        .where('credits.user_id', user.id);
       if (client_id) query = query.where('credits.client_id', client_id);
       if (available) query = query.where('credits.remaining_amount', '>', 0);
       return query.orderBy('credits.created_at', 'desc');
     },
 
-    userSettings: () => db('user_settings').where('id', 1).first(),
+    users: (_: any, __: any, context: Context) => {
+      requireAdmin(context);
+      return db('users').select('id', 'email', 'name', 'role', 'created_at').orderBy('created_at');
+    },
 
-    dashboard: async () => {
-      const [totalClients] = await db('clients').count('id as count');
-      const [totalProjects] = await db('projects').where('is_active', true).count('id as count');
+    userSettings: async (_: any, __: any, context: Context) => {
+      const user = requireAuth(context);
+      let settings = await db('user_settings').where('user_id', user.id).first();
+      if (!settings) {
+        const [created] = await db('user_settings').insert({ user_id: user.id }).returning('*');
+        settings = created;
+      }
+      return settings;
+    },
+
+    dashboard: async (_: any, __: any, context: Context) => {
+      const user = requireAuth(context);
+      const [totalClients] = await db('clients').where('user_id', user.id).count('id as count');
+      const [totalProjects] = await db('projects').where('user_id', user.id).where('is_active', true).count('id as count');
       const runningTimers = await db('time_entries')
+        .where('time_entries.user_id', user.id)
         .whereNull('end_time')
         .join('projects', 'time_entries.project_id', 'projects.id')
         .select('time_entries.*', 'projects.name as project_name');
       const unbilledEntries = await db('time_entries')
+        .where('time_entries.user_id', user.id)
         .whereNull('invoice_id')
         .where('is_billable', true)
         .whereNotNull('end_time')
@@ -132,14 +198,17 @@ export const resolvers = {
           db.raw('SUM(time_entries.duration_minutes / 60.0 * COALESCE(time_entries.rate_override, projects.default_rate)) as total_amount')
         );
       const recentInvoices = await db('invoices')
+        .where('invoices.user_id', user.id)
         .join('clients', 'invoices.client_id', 'clients.id')
         .select('invoices.*', 'clients.name as client_name')
         .orderBy('invoices.created_at', 'desc')
         .limit(5);
       const outstandingAmount = await db('invoices')
+        .where('user_id', user.id)
         .whereIn('status', ['sent', 'overdue'])
         .sum('total as total');
       const availableCredits = await db('credits')
+        .where('user_id', user.id)
         .where('remaining_amount', '>', 0)
         .sum('remaining_amount as total');
       return {
@@ -153,48 +222,141 @@ export const resolvers = {
         available_credits: parseFloat(availableCredits[0]?.total || '0'),
       };
     },
+
+    invites: async (_: any, __: any, context: Context) => {
+      requireAdmin(context);
+      return db('invites')
+        .leftJoin('users', 'invites.created_by', 'users.id')
+        .select('invites.*', 'users.name as creator_name')
+        .orderBy('invites.created_at', 'desc');
+    },
   },
 
   Mutation: {
-    createClient: async (_: any, { input }: any) => {
-      const [client] = await db('clients').insert(input).returning('*');
+    login: async (_: any, { input }: { input: { email: string; password: string } }) => {
+      const user = await db('users').where('email', input.email).first();
+      if (!user || !(await bcrypt.compare(input.password, user.password_hash))) {
+        throw new GraphQLError('Invalid email or password');
+      }
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+      return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role, created_at: user.created_at } };
+    },
+
+    signup: async (_: any, { input }: { input: { email: string; password: string; name?: string; invite_token: string } }) => {
+      const invite = await db('invites').where('token', input.invite_token).first();
+      if (!invite) throw new GraphQLError('Invalid invite token');
+      if (invite.used_by) throw new GraphQLError('Invite token has already been used');
+      if (new Date(invite.expires_at) < new Date()) throw new GraphQLError('Invite token has expired');
+      if (invite.email && invite.email.toLowerCase() !== input.email.toLowerCase()) {
+        throw new GraphQLError('This invite was sent to a different email address');
+      }
+
+      const existing = await db('users').where('email', input.email).first();
+      if (existing) throw new GraphQLError('An account with this email already exists');
+
+      if (input.password.length < 8) throw new GraphQLError('Password must be at least 8 characters');
+
+      const password_hash = await bcrypt.hash(input.password, 10);
+      const [user] = await db('users')
+        .insert({ email: input.email, password_hash, name: input.name || null, role: 'user' })
+        .returning('*');
+
+      await db('invites').where('id', invite.id).update({ used_by: user.id, used_at: new Date() });
+
+      // Create user_settings row for new user
+      await db('user_settings').insert({ user_id: user.id });
+
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+      return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role, created_at: user.created_at } };
+    },
+
+    createInvite: async (_: any, { input }: { input?: { email?: string; expires_in_days?: number } }, context: Context) => {
+      requireAdmin(context);
+      const token = crypto.randomUUID();
+      const days = input?.expires_in_days || 7;
+      const expires_at = new Date(Date.now() + days * 86400000);
+      const [invite] = await db('invites')
+        .insert({ token, email: input?.email || null, created_by: context.user!.id, expires_at })
+        .returning('*');
+      return invite;
+    },
+
+    deleteInvite: async (_: any, { id }: { id: number }, context: Context) => {
+      requireAdmin(context);
+      await db('invites').where('id', id).del();
+      return true;
+    },
+
+    updateUserRole: async (_: any, { id, role }: { id: number; role: string }, context: Context) => {
+      requireAdmin(context);
+      if (role !== 'user' && role !== 'admin') throw new GraphQLError('Role must be "user" or "admin"');
+      if (id === context.user!.id) throw new GraphQLError('Cannot change your own role');
+      const [user] = await db('users')
+        .where('id', id)
+        .update({ role })
+        .returning('*');
+      if (!user) throw new GraphQLError('User not found');
+      return user;
+    },
+
+    changePassword: async (_: any, { currentPassword, newPassword }: { currentPassword: string; newPassword: string }, context: Context) => {
+      const authUser = requireAuth(context);
+      const user = await db('users').where('id', authUser.id).first();
+      if (!(await bcrypt.compare(currentPassword, user.password_hash))) {
+        throw new GraphQLError('Current password is incorrect');
+      }
+      if (newPassword.length < 8) throw new GraphQLError('New password must be at least 8 characters');
+      const password_hash = await bcrypt.hash(newPassword, 10);
+      await db('users').where('id', authUser.id).update({ password_hash });
+      return true;
+    },
+
+    createClient: async (_: any, { input }: any, context: Context) => {
+      const user = requireAuth(context);
+      const [client] = await db('clients').insert({ ...input, user_id: user.id }).returning('*');
       return client;
     },
 
-    updateClient: async (_: any, { id, input }: any) => {
+    updateClient: async (_: any, { id, input }: any, context: Context) => {
+      const user = requireAuth(context);
       const [client] = await db('clients')
-        .where('id', id)
+        .where({ id, user_id: user.id })
         .update({ ...input, updated_at: db.fn.now() })
         .returning('*');
       if (!client) throw new Error('Client not found');
       return client;
     },
 
-    deleteClient: async (_: any, { id }: { id: number }) => {
-      await db('clients').where('id', id).del();
+    deleteClient: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      await db('clients').where({ id, user_id: user.id }).del();
       return true;
     },
 
-    createProject: async (_: any, { input }: any) => {
-      const [project] = await db('projects').insert(input).returning('*');
+    createProject: async (_: any, { input }: any, context: Context) => {
+      const user = requireAuth(context);
+      const [project] = await db('projects').insert({ ...input, user_id: user.id }).returning('*');
       return project;
     },
 
-    updateProject: async (_: any, { id, input }: any) => {
+    updateProject: async (_: any, { id, input }: any, context: Context) => {
+      const user = requireAuth(context);
       const [project] = await db('projects')
-        .where('id', id)
+        .where({ id, user_id: user.id })
         .update({ ...input, updated_at: db.fn.now() })
         .returning('*');
       if (!project) throw new Error('Project not found');
       return project;
     },
 
-    deleteProject: async (_: any, { id }: { id: number }) => {
-      await db('projects').where('id', id).del();
+    deleteProject: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      await db('projects').where({ id, user_id: user.id }).del();
       return true;
     },
 
-    createTimeEntry: async (_: any, { input }: any) => {
+    createTimeEntry: async (_: any, { input }: any, context: Context) => {
+      const user = requireAuth(context);
       let duration = input.duration_minutes;
       if (!duration && input.start_time && input.end_time) {
         duration = Math.round((new Date(input.end_time).getTime() - new Date(input.start_time).getTime()) / 60000);
@@ -202,6 +364,7 @@ export const resolvers = {
       const [entry] = await db('time_entries')
         .insert({
           ...input,
+          user_id: user.id,
           start_time: input.start_time || new Date(),
           duration_minutes: duration,
           is_billable: input.is_billable ?? true,
@@ -210,7 +373,8 @@ export const resolvers = {
       return entry;
     },
 
-    updateTimeEntry: async (_: any, { id, input }: any) => {
+    updateTimeEntry: async (_: any, { id, input }: any, context: Context) => {
+      const user = requireAuth(context);
       let duration = input.duration_minutes;
       if (!duration && input.start_time && input.end_time) {
         duration = Math.round((new Date(input.end_time).getTime() - new Date(input.start_time).getTime()) / 60000);
@@ -218,49 +382,53 @@ export const resolvers = {
       const updateData: any = { ...input, updated_at: db.fn.now() };
       if (duration !== undefined) updateData.duration_minutes = duration;
       const [entry] = await db('time_entries')
-        .where('id', id)
+        .where({ id, user_id: user.id })
         .update(updateData)
         .returning('*');
       if (!entry) throw new Error('Time entry not found');
       return entry;
     },
 
-    deleteTimeEntry: async (_: any, { id }: { id: number }) => {
-      await db('time_entries').where('id', id).del();
+    deleteTimeEntry: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      await db('time_entries').where({ id, user_id: user.id }).del();
       return true;
     },
 
-    stopTimeEntry: async (_: any, { id }: { id: number }) => {
-      const entry = await db('time_entries').where('id', id).first();
+    stopTimeEntry: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const entry = await db('time_entries').where({ id, user_id: user.id }).first();
       if (!entry) throw new Error('Time entry not found');
       if (entry.end_time) throw new Error('Timer already stopped');
       const end_time = new Date();
       const duration_minutes = Math.round((end_time.getTime() - new Date(entry.start_time).getTime()) / 60000);
       const [updated] = await db('time_entries')
-        .where('id', id)
+        .where({ id, user_id: user.id })
         .update({ end_time, duration_minutes, updated_at: db.fn.now() })
         .returning('*');
       return updated;
     },
 
-    restartTimeEntry: async (_: any, { id }: { id: number }) => {
-      const entry = await db('time_entries').where('id', id).first();
+    restartTimeEntry: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const entry = await db('time_entries').where({ id, user_id: user.id }).first();
       if (!entry) throw new Error('Time entry not found');
       if (!entry.end_time) throw new Error('Timer is already running');
-      const runningTimer = await db('time_entries').whereNull('end_time').first();
+      const runningTimer = await db('time_entries').where('user_id', user.id).whereNull('end_time').first();
       if (runningTimer) throw new Error('Another timer is already running. Stop it first.');
       const [updated] = await db('time_entries')
-        .where('id', id)
+        .where({ id, user_id: user.id })
         .update({ end_time: null, duration_minutes: null, updated_at: db.fn.now() })
         .returning('*');
       return updated;
     },
 
-    unbillTimeEntry: async (_: any, { id }: { id: number }) => {
-      const entry = await db('time_entries').where('id', id).first();
+    unbillTimeEntry: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const entry = await db('time_entries').where({ id, user_id: user.id }).first();
       if (!entry) throw new Error('Time entry not found');
       if (!entry.invoice_id) throw new Error('Time entry is not billed');
-      const invoice = await db('invoices').where('id', entry.invoice_id).first();
+      const invoice = await db('invoices').where({ id: entry.invoice_id, user_id: user.id }).first();
       if (invoice && invoice.status !== 'draft' && invoice.status !== 'cancelled') {
         throw new Error('Cannot unbill: invoice must be draft or cancelled');
       }
@@ -268,7 +436,7 @@ export const resolvers = {
         .where({ invoice_id: entry.invoice_id, time_entry_id: entry.id })
         .del();
       const [updated] = await db('time_entries')
-        .where('id', id)
+        .where({ id, user_id: user.id })
         .update({ invoice_id: null, updated_at: db.fn.now() })
         .returning('*');
       if (invoice) {
@@ -286,12 +454,14 @@ export const resolvers = {
       return updated;
     },
 
-    creditTimeEntry: async (_: any, { id }: { id: number }) => {
+    creditTimeEntry: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
       const entry = await db('time_entries')
         .join('projects', 'time_entries.project_id', 'projects.id')
         .join('clients', 'projects.client_id', 'clients.id')
         .select('time_entries.*', 'projects.default_rate', 'projects.name as project_name', 'clients.id as client_id')
         .where('time_entries.id', id)
+        .where('time_entries.user_id', user.id)
         .first();
       if (!entry) throw new Error('Time entry not found');
       if (!entry.invoice_id) throw new Error('Time entry is not billed');
@@ -301,6 +471,7 @@ export const resolvers = {
       const [credit] = await db('credits')
         .insert({
           client_id: entry.client_id,
+          user_id: user.id,
           amount,
           remaining_amount: amount,
           description: `Credit for: ${entry.project_name} - ${entry.description || 'Time entry'}`,
@@ -310,17 +481,29 @@ export const resolvers = {
       return credit;
     },
 
-    createInvoice: async (_: any, { input }: any) => {
-      const { client_id, issue_date, due_date, tax_rate, notes, time_entry_ids, credit_ids, credit_time_entry_ids } = input;
+    createInvoice: async (_: any, { input }: any, context: Context) => {
+      const user = requireAuth(context);
+      const { client_id, invoice_number: customNumber, issue_date, due_date, tax_rate, notes, time_entry_ids, credit_ids, credit_time_entry_ids } = input;
 
-      const last = await db('invoices').orderBy('id', 'desc').first();
-      const invoice_number = last
-        ? `INV-${String(parseInt(last.invoice_number.replace('INV-', ''), 10) + 1).padStart(4, '0')}`
-        : 'INV-0001';
+      let invoice_number: string;
+      if (customNumber) {
+        const existing = await db('invoices').where({ invoice_number: customNumber, user_id: user.id }).first();
+        if (existing) throw new GraphQLError(`Invoice number "${customNumber}" already exists`);
+        invoice_number = customNumber;
+      } else {
+        const last = await db('invoices').where('user_id', user.id).orderBy('id', 'desc').first();
+        if (last) {
+          const num = parseInt(last.invoice_number, 10);
+          invoice_number = String((num || 0) + 1);
+        } else {
+          invoice_number = '1';
+        }
+      }
 
       const [invoice] = await db('invoices')
         .insert({
           client_id,
+          user_id: user.id,
           invoice_number,
           issue_date: issue_date || new Date(),
           due_date: due_date || new Date(Date.now() + 30 * 86400000),
@@ -335,7 +518,8 @@ export const resolvers = {
         const entries = await db('time_entries')
           .join('projects', 'time_entries.project_id', 'projects.id')
           .select('time_entries.*', 'projects.default_rate', 'projects.name as project_name')
-          .whereIn('time_entries.id', time_entry_ids);
+          .whereIn('time_entries.id', time_entry_ids)
+          .where('time_entries.user_id', user.id);
         for (const entry of entries) {
           const rate = entry.rate_override ?? entry.default_rate;
           const hours = (entry.duration_minutes || 0) / 60;
@@ -360,13 +544,15 @@ export const resolvers = {
         const creditEntries = await db('time_entries')
           .join('projects', 'time_entries.project_id', 'projects.id')
           .select('time_entries.*', 'projects.default_rate', 'projects.name as project_name')
-          .whereIn('time_entries.id', credit_time_entry_ids);
+          .whereIn('time_entries.id', credit_time_entry_ids)
+          .where('time_entries.user_id', user.id);
         for (const entry of creditEntries) {
           const rate = entry.rate_override ?? entry.default_rate;
           const hours = (entry.duration_minutes || 0) / 60;
           const amount = parseFloat((hours * rate).toFixed(2));
           await db('credits').insert({
             client_id,
+            user_id: user.id,
             amount,
             remaining_amount: 0,
             description: `Credit for: ${entry.project_name} - ${entry.description || 'Time entry'}`,
@@ -378,7 +564,7 @@ export const resolvers = {
       }
 
       if (credit_ids?.length) {
-        const creditsToApply = await db('credits').whereIn('id', credit_ids).where('remaining_amount', '>', 0).orderBy('created_at');
+        const creditsToApply = await db('credits').whereIn('id', credit_ids).where('user_id', user.id).where('remaining_amount', '>', 0).orderBy('created_at');
         const totalBeforeCredits = subtotal + subtotal * ((tax_rate || 0) / 100);
         for (const credit of creditsToApply) {
           if (credits_applied >= totalBeforeCredits) break;
@@ -406,18 +592,22 @@ export const resolvers = {
       return updated;
     },
 
-    updateInvoiceStatus: async (_: any, { id, status }: { id: number; status: string }) => {
+    updateInvoiceStatus: async (_: any, { id, status }: { id: number; status: string }, context: Context) => {
+      const user = requireAuth(context);
       const [invoice] = await db('invoices')
-        .where('id', id)
+        .where({ id, user_id: user.id })
         .update({ status, updated_at: db.fn.now() })
         .returning('*');
       if (!invoice) throw new Error('Invoice not found');
       return invoice;
     },
 
-    deleteInvoice: async (_: any, { id }: { id: number }) => {
-      await db('time_entries').where('invoice_id', id).update({ invoice_id: null });
-      const credits = await db('credits').where('applied_invoice_id', id);
+    deleteInvoice: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const invoice = await db('invoices').where({ id, user_id: user.id }).first();
+      if (!invoice) throw new Error('Invoice not found');
+      await db('time_entries').where({ invoice_id: id, user_id: user.id }).update({ invoice_id: null });
+      const credits = await db('credits').where({ applied_invoice_id: id, user_id: user.id });
       for (const credit of credits) {
         await db('credits').where('id', credit.id).update({
           remaining_amount: credit.amount,
@@ -425,28 +615,39 @@ export const resolvers = {
         });
       }
       await db('invoice_line_items').where('invoice_id', id).del();
-      await db('invoices').where('id', id).del();
+      await db('invoices').where({ id, user_id: user.id }).del();
       return true;
     },
 
-    createCredit: async (_: any, { input }: any) => {
+    createCredit: async (_: any, { input }: any, context: Context) => {
+      const user = requireAuth(context);
       const [credit] = await db('credits')
-        .insert({ ...input, remaining_amount: input.amount })
+        .insert({ ...input, user_id: user.id, remaining_amount: input.amount })
         .returning('*');
       return credit;
     },
 
-    deleteCredit: async (_: any, { id }: { id: number }) => {
-      await db('credits').where('id', id).del();
+    deleteCredit: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      await db('credits').where({ id, user_id: user.id }).del();
       return true;
     },
 
-    updateUserSettings: async (_: any, { input }: any) => {
-      const [settings] = await db('user_settings')
-        .where('id', 1)
-        .update({ ...input, updated_at: db.fn.now() })
-        .returning('*');
-      return settings;
+    updateUserSettings: async (_: any, { input }: any, context: Context) => {
+      const user = requireAuth(context);
+      const existing = await db('user_settings').where('user_id', user.id).first();
+      if (existing) {
+        const [settings] = await db('user_settings')
+          .where('user_id', user.id)
+          .update({ ...input, updated_at: db.fn.now() })
+          .returning('*');
+        return settings;
+      } else {
+        const [settings] = await db('user_settings')
+          .insert({ ...input, user_id: user.id })
+          .returning('*');
+        return settings;
+      }
     },
   },
 };

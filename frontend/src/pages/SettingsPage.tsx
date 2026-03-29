@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { gql } from '../api/client';
-import { UserSettings } from '../types';
+import { UserSettings, User } from '../types';
+import { useAuth } from '../auth/AuthContext';
 
-const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle';
+const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days';
 
 const SETTINGS_QUERY = `query { userSettings { ${SETTINGS_FIELDS} } }`;
 
@@ -14,8 +15,11 @@ const UPDATE_SETTINGS_MUTATION = `
   }
 `;
 
+const USERS_QUERY = `query { users { id email name role created_at } }`;
+
 export default function SettingsPage() {
   const qc = useQueryClient();
+  const { isAdmin } = useAuth();
   const [company, setCompany] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -30,10 +34,20 @@ export default function SettingsPage() {
   const [cashapp, setCashapp] = useState('');
   const [paypal, setPaypal] = useState('');
   const [zelle, setZelle] = useState('');
+  const [defaultDueDays, setDefaultDueDays] = useState('30');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
   const { data: settings } = useQuery<UserSettings>({
     queryKey: ['userSettings'],
     queryFn: async () => (await gql<{ userSettings: UserSettings }>(SETTINGS_QUERY)).userSettings,
+  });
+
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ['users'],
+    queryFn: async () => (await gql<{ users: User[] }>(USERS_QUERY)).users,
+    enabled: isAdmin,
   });
 
   useEffect(() => {
@@ -52,6 +66,7 @@ export default function SettingsPage() {
       setCashapp(settings.cashapp || '');
       setPaypal(settings.paypal || '');
       setZelle(settings.zelle || '');
+      setDefaultDueDays(String(settings.default_due_days ?? 30));
     }
   }, [settings]);
 
@@ -73,11 +88,49 @@ export default function SettingsPage() {
           cashapp: cashapp || null,
           paypal: paypal || null,
           zelle: zelle || null,
+          default_due_days: defaultDueDays ? Number(defaultDueDays) : null,
         },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['userSettings'] });
       toast.success('Settings saved');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const changePassword = useMutation({
+    mutationFn: () =>
+      gql('mutation($currentPassword: String!, $newPassword: String!) { changePassword(currentPassword: $currentPassword, newPassword: $newPassword) }',
+        { currentPassword, newPassword }),
+    onSuccess: () => {
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      toast.success('Password changed');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmNewPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    changePassword.mutate();
+  };
+
+  const updateRole = useMutation({
+    mutationFn: ({ id, role }: { id: number; role: string }) =>
+      gql('mutation($id: Int!, $role: String!) { updateUserRole(id: $id, role: $role) { id role } }',
+        { id, role }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      toast.success('Role updated');
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -155,10 +208,93 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        <div className="bg-white rounded-lg shadow p-4">
+          <h2 className="font-semibold mb-4">Invoice Defaults</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Default Due In (days)</label>
+              <input className="border rounded p-2 w-full" type="number" min="0" value={defaultDueDays}
+                onChange={(e) => setDefaultDueDays(e.target.value)} />
+              <p className="text-xs text-gray-400 mt-1">Set to 0 for "Upon Receipt"</p>
+            </div>
+          </div>
+        </div>
+
         <button type="submit" className="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700">
           Save Settings
         </button>
       </form>
+
+      <form onSubmit={handleChangePassword} className="mt-6">
+        <div className="bg-white rounded-lg shadow p-4">
+          <h2 className="font-semibold mb-4">Change Password</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+              <input type="password" required className="border rounded p-2 w-full" value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+              <input type="password" required className="border rounded p-2 w-full" value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)} />
+              <p className="text-xs text-gray-400 mt-1">Minimum 8 characters</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+              <input type="password" required className="border rounded p-2 w-full" value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)} />
+            </div>
+          </div>
+          <button type="submit" className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700">
+            Change Password
+          </button>
+        </div>
+      </form>
+
+      {isAdmin && (
+        <div className="bg-white rounded-lg shadow p-4 mt-6">
+          <h2 className="font-semibold mb-4">User Permissions</h2>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-left text-gray-600">
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Role</th>
+                <th className="px-4 py-3">Joined</th>
+                <th className="px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id} className="border-t hover:bg-gray-50">
+                  <td className="px-4 py-3">{u.email}</td>
+                  <td className="px-4 py-3">{u.name || '-'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      u.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
+                    }`}>{u.role}</span>
+                  </td>
+                  <td className="px-4 py-3">{new Date(u.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={u.role}
+                      onChange={(e) => updateRole.mutate({ id: u.id, role: e.target.value })}
+                      className="border rounded p-1 text-sm"
+                    >
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+              {users.length === 0 && (
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No users</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
