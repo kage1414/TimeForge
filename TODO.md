@@ -5,6 +5,7 @@
 ## 🧠 Backlog
 
 - [ ] Refactor entire project to use latest version of material ui.
+- [ ] Allow me to credit time that has previously been billed
 
 ## ✅ Done
 
