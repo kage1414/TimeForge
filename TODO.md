@@ -4,8 +4,14 @@
 
 ## 🧠 Backlog
 
+- Don't show the restart option if an entry has an end time
+- Don't allow me to manually set an end time that is before the start time
+- Add a test button for smtp settings
+- The Send Email option should only be available if the user has configured smtp settings
+
 ## ✅ Done
 
+- [x] Import time entries from Excel with column mapping, preview, and invoice linkage
 - [x] Allow me to credit time that has previously been billed
 - [x] Remove credits applied in bottom of invoice - credits are now negative line items
 

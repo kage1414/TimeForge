@@ -12,6 +12,7 @@ import CreateInvoicePage from "./pages/CreateInvoicePage";
 import SettingsPage from "./pages/SettingsPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
+import ImportPage from "./pages/ImportPage";
 import InvitesPage from "./pages/InvitesPage";
 
 interface NavItem {
@@ -105,7 +106,10 @@ export default function App() {
     {
       path: "/time",
       label: "Time Tracking",
-      children: [{ path: "/invoices", label: "Invoices" }],
+      children: [
+        { path: "/invoices", label: "Invoices" },
+        { path: "/import", label: "Import" },
+      ],
     },
     {
       path: "/settings",
@@ -166,6 +170,7 @@ export default function App() {
             <Route path="/invoices" element={<InvoicesPage />} />
             <Route path="/invoices/new" element={<CreateInvoicePage />} />
             <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
+            <Route path="/import" element={<ImportPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route element={<AdminRoute />}>
               <Route path="/admin/invites" element={<InvitesPage />} />

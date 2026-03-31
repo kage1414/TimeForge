@@ -16,7 +16,9 @@
       "Bash(docker-compose -f docker-compose.dev.yml logs --tail=20 backend)",
       "Bash(docker-compose -f docker-compose.dev.yml up --build -d frontend)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npx vite:*)",
+      "Bash(node -e \"const XLSX = require\\(''xlsx''\\); console.log\\(''ok'', typeof XLSX.read\\)\")"
     ]
   }
 }

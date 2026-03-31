@@ -731,5 +731,39 @@ export const resolvers = {
 
       return true;
     },
+
+    importTimeEntries: async (_: any, { entries }: { entries: any[] }, context: Context) => {
+      const user = requireAuth(context);
+      let imported = 0;
+      for (const entry of entries) {
+        const { project_id, description, start_time, end_time, is_billable, rate_override, invoice_number } = entry;
+        const project = await db('projects').where({ id: project_id, user_id: user.id }).first();
+        if (!project) throw new GraphQLError(`Project with id ${project_id} not found`);
+
+        const duration_minutes = Math.round((new Date(end_time).getTime() - new Date(start_time).getTime()) / 60000);
+
+        let invoice_id = null;
+        if (invoice_number) {
+          const invoice = await db('invoices').where({ invoice_number, user_id: user.id }).first();
+          if (invoice) {
+            invoice_id = invoice.id;
+          }
+        }
+
+        await db('time_entries').insert({
+          project_id,
+          user_id: user.id,
+          description: description || null,
+          start_time,
+          end_time,
+          duration_minutes,
+          is_billable: is_billable ?? true,
+          rate_override: rate_override ?? null,
+          invoice_id,
+        });
+        imported++;
+      }
+      return imported;
+    },
   },
 };

@@ -273,6 +273,16 @@ export const typeDefs = `#graphql
     rate_override: Float
   }
 
+  input ImportTimeEntryInput {
+    project_id: Int!
+    description: String
+    start_time: String!
+    end_time: String!
+    is_billable: Boolean
+    rate_override: Float
+    invoice_number: String
+  }
+
   input CreateInvoiceInput {
     client_id: Int!
     invoice_number: String
@@ -319,5 +329,6 @@ export const typeDefs = `#graphql
     deleteCredit(id: Int!): Boolean!
     updateUserSettings(input: UpdateUserSettingsInput!): UserSettings!
     sendInvoice(id: Int!, to: String!): Boolean!
+    importTimeEntries(entries: [ImportTimeEntryInput!]!): Int!
   }
 `;
