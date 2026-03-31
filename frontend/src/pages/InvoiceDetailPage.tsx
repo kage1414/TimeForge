@@ -13,9 +13,8 @@ const INVOICE_QUERY = `
     invoice(id: $id) {
       id client_id client_name client_company client_email client_address1 client_address2 client_city client_state client_zip
       invoice_number status issue_date due_date
-      subtotal tax_rate tax_amount credits_applied total notes
+      subtotal tax_rate tax_amount total notes
       line_items { id description quantity rate amount time_entry_id }
-      credits { id description amount remaining_amount }
       created_at updated_at
     }
   }
@@ -93,14 +92,16 @@ export default function InvoiceDetailPage() {
     if (!invoice) return;
     const w = window.open('', '_blank');
     if (!w) return;
-    const lineRows = (invoice.line_items || []).map((li) =>
-      `<tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${(() => { const [first, ...rest] = li.description.split('\n'); const dashIdx = first.indexOf(' - '); const name = dashIdx >= 0 ? first.slice(0, dashIdx) : first; const date = dashIdx >= 0 ? first.slice(dashIdx) : ''; return `<strong>${name}</strong>${date}${rest.length ? '<br><em>' + rest.join('<br>') + '</em>' : ''}`; })()}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">${Number(li.quantity).toFixed(2)}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">$${Number(li.rate).toFixed(2)}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right">$${Number(li.amount).toFixed(2)}</td>
-      </tr>`
-    ).join('');
+    const lineRows = (invoice.line_items || []).map((li) => {
+      const isCredit = Number(li.amount) < 0;
+      const colorStyle = isCredit ? 'color:#16a34a' : '';
+      return `<tr${isCredit ? ' style="color:#16a34a"' : ''}>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;${colorStyle}">${(() => { const [first, ...rest] = li.description.split('\n'); const dashIdx = first.indexOf(' - '); const name = dashIdx >= 0 ? first.slice(0, dashIdx) : first; const date = dashIdx >= 0 ? first.slice(dashIdx) : ''; return `<strong>${name}</strong>${date}${rest.length ? '<br><em>' + rest.join('<br>') + '</em>' : ''}`; })()}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${Number(li.quantity).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${isCredit ? `-$${Math.abs(Number(li.rate)).toFixed(2)}` : `$${Number(li.rate).toFixed(2)}`}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${isCredit ? `-$${Math.abs(Number(li.amount)).toFixed(2)}` : `$${Number(li.amount).toFixed(2)}`}</td>
+      </tr>`;
+    }).join('');
 
     let totalsHtml = `
       <tr><td colspan="3" style="padding:8px;text-align:right;color:#6b7280">Subtotal</td>
@@ -108,14 +109,6 @@ export default function InvoiceDetailPage() {
     if (Number(invoice.tax_rate) > 0) {
       totalsHtml += `<tr><td colspan="3" style="padding:8px;text-align:right;color:#6b7280">Tax (${Number(invoice.tax_rate)}%)</td>
         <td style="padding:8px;text-align:right">$${Number(invoice.tax_amount).toFixed(2)}</td></tr>`;
-    }
-    if (Number(invoice.credits_applied) > 0) {
-      totalsHtml += `<tr><td colspan="3" style="padding:8px;text-align:right;color:#16a34a">Credits Applied</td>
-        <td style="padding:8px;text-align:right;color:#16a34a">-$${Number(invoice.credits_applied).toFixed(2)}</td></tr>`;
-      (invoice.credits || []).forEach((c) => {
-        totalsHtml += `<tr><td colspan="3" style="padding:4px 8px;text-align:right;color:#16a34a;font-size:12px;padding-left:32px">${c.description}</td>
-          <td style="padding:4px 8px;text-align:right;color:#16a34a;font-size:12px">-$${Number(c.amount).toFixed(2)}</td></tr>`;
-      });
     }
     totalsHtml += `<tr style="border-top:2px solid #111"><td colspan="3" style="padding:8px;text-align:right;font-weight:bold">Total:</td>
       <td style="padding:8px;text-align:right;font-weight:bold">$${Number(invoice.total).toFixed(2)}</td></tr>`;
@@ -210,9 +203,6 @@ export default function InvoiceDetailPage() {
     if (Number(invoice.tax_rate) > 0) {
       rows.push([`Tax (${Number(invoice.tax_rate)}%)`, '', '', Number(invoice.tax_amount).toFixed(2)]);
     }
-    if (Number(invoice.credits_applied) > 0) {
-      rows.push(['Credits Applied', '', '', `-${Number(invoice.credits_applied).toFixed(2)}`]);
-    }
     rows.push(['Total', '', '', Number(invoice.total).toFixed(2)]);
     const csv = rows.map((r) => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -289,14 +279,18 @@ export default function InvoiceDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {(invoice.line_items || []).map((li) => (
-              <tr key={li.id} className="border-b last:border-0">
+            {(invoice.line_items || []).map((li) => {
+              const isCredit = Number(li.amount) < 0;
+              const creditClass = isCredit ? ' text-green-600' : '';
+              return (
+              <tr key={li.id} className={`border-b last:border-0${creditClass}`}>
                 <td className="py-2">{(() => { const [first, ...rest] = li.description.split('\n'); const dashIdx = first.indexOf(' - '); const name = dashIdx >= 0 ? first.slice(0, dashIdx) : first; const date = dashIdx >= 0 ? first.slice(dashIdx) : ''; return <><span className="font-semibold">{name}</span>{date && <span>{date}</span>}{rest.length > 0 && <><br/><span className="italic">{rest.join('\n')}</span></>}</>; })()}</td>
                 <td className="py-2 text-right">{Number(li.quantity).toFixed(2)}</td>
-                <td className="py-2 text-right">${Number(li.rate).toFixed(2)}</td>
-                <td className="py-2 text-right">${Number(li.amount).toFixed(2)}</td>
+                <td className="py-2 text-right">{isCredit ? `-$${Math.abs(Number(li.rate)).toFixed(2)}` : `$${Number(li.rate).toFixed(2)}`}</td>
+                <td className="py-2 text-right">{isCredit ? `-$${Math.abs(Number(li.amount)).toFixed(2)}` : `$${Number(li.amount).toFixed(2)}`}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
 
@@ -310,20 +304,6 @@ export default function InvoiceDetailPage() {
               <span className="text-gray-500">Tax ({Number(invoice.tax_rate)}%)</span>
               <span>${Number(invoice.tax_amount).toFixed(2)}</span>
             </div>
-          )}
-          {Number(invoice.credits_applied) > 0 && (
-            <>
-              <div className="flex justify-between py-1 text-green-600">
-                <span>Credits Applied</span>
-                <span>-${Number(invoice.credits_applied).toFixed(2)}</span>
-              </div>
-              {(invoice.credits || []).map((c) => (
-                <div key={c.id} className="flex justify-between py-0.5 text-xs text-green-500 pl-4">
-                  <span>{c.description}</span>
-                  <span>-${Number(c.amount).toFixed(2)}</span>
-                </div>
-              ))}
-            </>
           )}
           <div className="flex justify-between py-1 font-bold text-lg border-t mt-2 pt-2">
             <span>Total</span>

@@ -4,9 +4,7 @@
 
 ## 🧠 Backlog
 
-- [ ] Refactor entire project to use latest version of material ui.
 - [ ] Allow me to credit time that has previously been billed
-- [ ] Remove credits applied in bottom. Instead, make a credit its own line item and follow the same format as billing.
 
 ## ✅ Done
 
