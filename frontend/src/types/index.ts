@@ -116,6 +116,7 @@ export interface UserSettings {
   smtp_secure: boolean | null;
   smtp_from_email: string | null;
   smtp_from_name: string | null;
+  default_email_template: string | null;
   updated_at: string;
 }
 

@@ -5,7 +5,7 @@ import { gql } from '../api/client';
 import { UserSettings, User } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
-const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name';
+const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template';
 
 const SETTINGS_QUERY = `query { userSettings { ${SETTINGS_FIELDS} } }`;
 
@@ -42,6 +42,7 @@ export default function SettingsPage() {
   const [smtpSecure, setSmtpSecure] = useState(true);
   const [smtpFromEmail, setSmtpFromEmail] = useState('');
   const [smtpFromName, setSmtpFromName] = useState('');
+  const [emailTemplate, setEmailTemplate] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -81,6 +82,7 @@ export default function SettingsPage() {
       setSmtpSecure(settings.smtp_secure ?? true);
       setSmtpFromEmail(settings.smtp_from_email || '');
       setSmtpFromName(settings.smtp_from_name || '');
+      setEmailTemplate(settings.default_email_template || '');
     }
   }, [settings]);
 
@@ -110,6 +112,7 @@ export default function SettingsPage() {
           smtp_secure: smtpSecure,
           smtp_from_email: smtpFromEmail || null,
           smtp_from_name: smtpFromName || null,
+          default_email_template: emailTemplate || null,
         },
       }),
     onSuccess: () => {
@@ -250,6 +253,15 @@ export default function SettingsPage() {
                 onChange={(e) => setDefaultDueDays(e.target.value)} />
               <p className="text-xs text-gray-400 mt-1">Set to 0 for "Upon Receipt"</p>
             </div>
+          </div>
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Default Email Template</label>
+            <textarea className="border rounded p-2 w-full h-40 text-sm font-mono" value={emailTemplate}
+              onChange={(e) => setEmailTemplate(e.target.value)}
+              placeholder={`Hi {{client_name}},\n\nPlease find attached invoice #{{invoice_number}} for \${{total}}.\n\nPayment is due {{due_date}}.\n\nThank you for your business!\n\n{{your_name}}`} />
+            <p className="text-xs text-gray-400 mt-1">
+              Available variables: {'{{client_name}}'}, {'{{client_first_name}}'}, {'{{client_last_name}}'}, {'{{invoice_number}}'}, {'{{total}}'}, {'{{due_date}}'}, {'{{your_name}}'}
+            </p>
           </div>
         </div>
 

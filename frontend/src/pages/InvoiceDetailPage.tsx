@@ -6,7 +6,7 @@ import { gql } from "../api/client";
 import { Invoice, UserSettings } from "../types";
 import ConfirmModal from "../components/ConfirmModal";
 
-const SETTINGS_QUERY = `query { userSettings { company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle smtp_host smtp_user } }`;
+const SETTINGS_QUERY = `query { userSettings { company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle smtp_host smtp_user default_email_template } }`;
 
 const INVOICE_QUERY = `
   query($id: Int!) {
@@ -159,19 +159,12 @@ export default function InvoiceDetailPage() {
     ].filter(Boolean);
 
     return `<!DOCTYPE html><html><head><title>Invoice ${invoice.invoice_number}</title>
-      <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 40px; color: #111; font-size: 14px; }
-        h1 { margin: 0; font-size: 36px; text-transform: uppercase; letter-spacing: 2px; }
-        table { width: 100%; border-collapse: collapse; }
-        .line-table th { text-align: left; padding: 10px 8px; border-top: 2px solid #111; border-bottom: 2px solid #111; font-size: 13px; color: #111; }
-        .line-table td { padding: 10px 8px; border-bottom: 1px solid #e5e7eb; }
-        .details-table td { padding: 4px 12px; font-size: 14px; }
-        @media print { body { margin: 20px; } }
-      </style></head><body>
+      <style>@media print { body { margin: 20px; } }</style></head>
+      <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:40px;color:#111;font-size:14px">
 
       <!-- Header: user info right-aligned, INVOICE title -->
       <div style="text-align:right;margin-bottom:32px">
-        <h1>INVOICE</h1>
+        <h1 style="margin:0;font-size:36px;text-transform:uppercase;letter-spacing:2px">INVOICE</h1>
         ${paymentLines.length ? `<div style="margin:4px 0 16px;color:#6b7280;font-size:13px">${paymentLines.map((l) => `<p style="margin:2px 0">${l}</p>`).join("")}</div>` : '<div style="margin-bottom:16px"></div>'}
         ${settings?.company ? `<p style="margin:2px 0;font-weight:700;font-size:16px">${settings.company}</p>` : ""}
         ${fullName ? `<p style="margin:2px 0;font-weight:600">${fullName}</p>` : ""}
@@ -196,20 +189,20 @@ export default function InvoiceDetailPage() {
           ${invoice.client_email ? `<p style="margin:6px 0 0;color:#6b7280">${invoice.client_email}</p>` : ""}
         </div>
         <div style="text-align:right">
-          <table class="details-table" style="margin-left:auto">
-            <tr><td style="color:#6b7280;text-align:right">Invoice Number:</td><td style="text-align:right;font-weight:500">${invoice.invoice_number}</td></tr>
-            <tr><td style="color:#6b7280;text-align:right">Invoice Date:</td><td style="text-align:right">${new Date(invoice.issue_date).toLocaleDateString()}</td></tr>
-            <tr><td style="color:#6b7280;text-align:right">Payment Due:</td><td style="text-align:right">${new Date(invoice.issue_date).toDateString() === new Date(invoice.due_date).toDateString() ? "Upon Receipt" : new Date(invoice.due_date).toLocaleDateString()}</td></tr>
-            <tr style="font-weight:600"><td style="padding-top:8px;text-align:right">Amount Due (USD):</td><td style="padding-top:8px;text-align:right">$${Number(invoice.total).toFixed(2)}</td></tr>
+          <table style="margin-left:auto;border-collapse:collapse">
+            <tr><td style="padding:4px 12px;font-size:14px;color:#6b7280;text-align:right">Invoice Number:</td><td style="padding:4px 12px;font-size:14px;text-align:right;font-weight:500">${invoice.invoice_number}</td></tr>
+            <tr><td style="padding:4px 12px;font-size:14px;color:#6b7280;text-align:right">Invoice Date:</td><td style="padding:4px 12px;font-size:14px;text-align:right">${new Date(invoice.issue_date).toLocaleDateString()}</td></tr>
+            <tr><td style="padding:4px 12px;font-size:14px;color:#6b7280;text-align:right">Payment Due:</td><td style="padding:4px 12px;font-size:14px;text-align:right">${new Date(invoice.issue_date).toDateString() === new Date(invoice.due_date).toDateString() ? "Upon Receipt" : new Date(invoice.due_date).toLocaleDateString()}</td></tr>
+            <tr style="font-weight:600"><td style="padding:4px 12px;font-size:14px;padding-top:8px;text-align:right">Amount Due (USD):</td><td style="padding:4px 12px;font-size:14px;padding-top:8px;text-align:right">$${Number(invoice.total).toFixed(2)}</td></tr>
           </table>
         </div>
       </div>
 
       <!-- Line Items -->
-      <table class="line-table">
+      <table style="width:100%;border-collapse:collapse">
         <thead><tr>
-          <th>Services</th><th style="text-align:right">Hours</th>
-          <th style="text-align:right">Rate</th><th style="text-align:right">Amount</th>
+          <th style="text-align:left;padding:10px 8px;border-top:2px solid #111;border-bottom:2px solid #111;font-size:13px;color:#111">Services</th><th style="text-align:right;padding:10px 8px;border-top:2px solid #111;border-bottom:2px solid #111;font-size:13px;color:#111">Hours</th>
+          <th style="text-align:right;padding:10px 8px;border-top:2px solid #111;border-bottom:2px solid #111;font-size:13px;color:#111">Rate</th><th style="text-align:right;padding:10px 8px;border-top:2px solid #111;border-bottom:2px solid #111;font-size:13px;color:#111">Amount</th>
         </tr></thead>
         <tbody>${lineRows}</tbody>
         <tfoot>${totalsHtml}</tfoot>
@@ -233,15 +226,14 @@ export default function InvoiceDetailPage() {
     const { default: html2canvas } = await import("html2canvas");
     const { jsPDF } = await import("jspdf");
     const html = buildInvoiceHtml();
+    const bodyContent = html.replace(/[\s\S]*<body[^>]*>/i, "").replace(/<\/body>[\s\S]*/i, "");
     const container = document.createElement("div");
-    container.innerHTML = html
-      .replace(/.*<body>/s, "")
-      .replace(/<\/body>.*/s, "");
+    container.innerHTML = bodyContent;
     container.style.cssText =
       'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:40px;color:#111;font-size:14px;position:absolute;left:-9999px;width:800px;';
     document.body.appendChild(container);
     try {
-      const canvas = await html2canvas(container, { scale: 2, useCORS: true });
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true, logging: false });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         unit: "mm",
@@ -261,8 +253,9 @@ export default function InvoiceDetailPage() {
         // Multi-page: slice the canvas into page-sized chunks
         let srcY = 0;
         const srcPageHeight = (canvas.width * usableHeight) / imgWidth;
-        while (srcY < canvas.height) {
+        while (srcY < canvas.height - 1) {
           const sliceHeight = Math.min(srcPageHeight, canvas.height - srcY);
+          if (sliceHeight < 2) break;
           const pageCanvas = document.createElement("canvas");
           pageCanvas.width = canvas.width;
           pageCanvas.height = sliceHeight;
@@ -356,9 +349,25 @@ export default function InvoiceDetailPage() {
                 const name = settings?.first_name
                   ? `${settings.first_name}${settings.last_name ? " " + settings.last_name : ""}`
                   : "";
-                setSendBody(
-                  `Hi ${invoice.client_name},\n\nPlease find attached invoice #${invoice.invoice_number} for $${Number(invoice.total).toFixed(2)}.\n\nPayment is due ${new Date(invoice.issue_date).toDateString() === new Date(invoice.due_date).toDateString() ? "upon receipt" : "by " + new Date(invoice.due_date).toLocaleDateString()}.\n\nThank you for your business!\n\n${name}`,
-                );
+                const dueStr = new Date(invoice.issue_date).toDateString() === new Date(invoice.due_date).toDateString()
+                  ? "upon receipt"
+                  : "by " + new Date(invoice.due_date).toLocaleDateString();
+                if (settings?.default_email_template) {
+                  setSendBody(
+                    settings.default_email_template
+                      .replace(/\{\{client_name\}\}/g, invoice.client_name)
+                      .replace(/\{\{invoice_number\}\}/g, invoice.invoice_number)
+                      .replace(/\{\{total\}\}/g, `$${Number(invoice.total).toFixed(2)}`)
+                      .replace(/\{\{due_date\}\}/g, dueStr)
+                      .replace(/\{\{your_name\}\}/g, name)
+                      .replace(/\{\{client_first_name\}\}/g, invoice.client_name.split(" ")[0] || "")
+                      .replace(/\{\{client_last_name\}\}/g, invoice.client_name.split(" ").slice(1).join(" ") || ""),
+                  );
+                } else {
+                  setSendBody(
+                    `Hi ${invoice.client_name},\n\nPlease find attached invoice #${invoice.invoice_number} for $${Number(invoice.total).toFixed(2)}.\n\nPayment is due ${dueStr}.\n\nThank you for your business!\n\n${name}`,
+                  );
+                }
                 setShowSendModal(true);
               }}
               className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700"

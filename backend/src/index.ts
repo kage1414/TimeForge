@@ -18,7 +18,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -47,7 +47,7 @@ async function start() {
     const server = new ApolloServer({ typeDefs, resolvers });
     await server.start();
 
-    app.use('/graphql', expressMiddleware(server, {
+    app.use('/graphql', cors(), express.json({ limit: '50mb' }), expressMiddleware(server, {
       context: async ({ req }): Promise<Context> => {
         const token = req.headers.authorization?.replace('Bearer ', '');
         if (!token) return { user: null };
