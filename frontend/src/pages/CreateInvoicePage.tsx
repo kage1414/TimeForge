@@ -238,7 +238,7 @@ export default function CreateInvoicePage() {
                       <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50">
                         <td className="py-2">{e.project_name}</td>
                         <td className="py-2">{e.description || '-'}</td>
-                        <td className="py-2">{new Date(e.start_time).toLocaleDateString()}</td>
+                        <td className="py-2">{e.start_time ? new Date(e.start_time).toLocaleDateString() : '—'}</td>
                         <td className="py-2 text-right">{hours.toFixed(2)}</td>
                         <td className="py-2 text-right">${Number(rate).toFixed(2)}</td>
                         <td className="py-2 text-right">${amount.toFixed(2)}</td>
@@ -289,7 +289,7 @@ export default function CreateInvoicePage() {
                         </td>
                         <td className="py-2">{e.project_name}</td>
                         <td className="py-2">{e.description || '-'}</td>
-                        <td className="py-2">{new Date(e.start_time).toLocaleDateString()}</td>
+                        <td className="py-2">{e.start_time ? new Date(e.start_time).toLocaleDateString() : '—'}</td>
                         <td className="py-2 text-right">{hours.toFixed(2)}</td>
                         <td className="py-2 text-right">${Number(rate).toFixed(2)}</td>
                         <td className="py-2 text-right">${amount.toFixed(2)}</td>
