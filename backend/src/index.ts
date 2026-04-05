@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import path from 'path';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import db from './db';
@@ -60,6 +61,12 @@ async function start() {
         }
       },
     }));
+
+    const publicDir = path.join(__dirname, '../public');
+    app.use(express.static(publicDir));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(publicDir, 'index.html'));
+    });
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
