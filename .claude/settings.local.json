@@ -35,7 +35,9 @@
       "Bash(docker rm:*)",
       "Bash(yarn remove:*)",
       "Bash(git checkout:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(git push:*)",
+      "Bash(git remote:*)"
     ]
   }
 }
