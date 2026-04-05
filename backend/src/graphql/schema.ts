@@ -10,6 +10,7 @@ export const typeDefs = `#graphql
     state: String
     zip: String
     phone: String
+    is_active: Boolean!
     created_at: String!
     updated_at: String!
   }
@@ -238,6 +239,7 @@ export const typeDefs = `#graphql
     state: String
     zip: String
     phone: String
+    is_active: Boolean
   }
 
   input CreateProjectInput {
