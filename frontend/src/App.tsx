@@ -29,13 +29,17 @@ function SidebarAccordion({
   item: NavItem;
   location: ReturnType<typeof useLocation>;
 }) {
-  const allLinks = [{ path: item.path, label: item.label }, ...(item.children ?? [])];
+  const allLinks = [
+    { path: item.path, label: item.label },
+    ...(item.children ?? []),
+  ];
 
   const isActive =
     location.pathname === item.path ||
     (item.path !== "/" && location.pathname.startsWith(item.path)) ||
     item.children?.some(
-      (c) => location.pathname === c.path || location.pathname.startsWith(c.path)
+      (c) =>
+        location.pathname === c.path || location.pathname.startsWith(c.path),
     );
 
   const [open, setOpen] = useState(!!isActive);
@@ -57,16 +61,24 @@ function SidebarAccordion({
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
-      <div className={`grid transition-all duration-200 ease-in-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+      <div
+        className={`grid transition-all duration-200 ease-in-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+      >
         <div className="overflow-hidden">
           <div className="mt-0.5 ml-2 border-l border-gray-200 pl-2 flex flex-col gap-0.5 pb-0.5">
             {allLinks.map((child) => {
               const childActive =
                 location.pathname === child.path ||
-                (child.path !== "/" && location.pathname.startsWith(child.path));
+                (child.path !== "/" &&
+                  location.pathname.startsWith(child.path));
               return (
                 <Link
                   key={child.path}
@@ -112,17 +124,19 @@ export default function App() {
       children: [{ path: "/projects", label: "Projects" }],
     },
     {
-      path: "/time",
-      label: "Time Tracking",
+      path: "/invoices",
+      label: "Invoices",
       children: [
-        { path: "/invoices", label: "Invoices" },
+        { path: "/time", label: "Time Tracking" },
         { path: "/import", label: "Import" },
       ],
     },
     {
       path: "/settings",
       label: "Settings",
-      children: isAdmin ? [{ path: "/admin/invites", label: "Invites" }] : undefined,
+      children: isAdmin
+        ? [{ path: "/admin/invites", label: "Invites" }]
+        : undefined,
     },
   ];
 
@@ -138,7 +152,11 @@ export default function App() {
         <nav className="flex-1 px-2 py-4 flex flex-col gap-1">
           {navItems.map((item) =>
             item.children ? (
-              <SidebarAccordion key={item.path} item={item} location={location} />
+              <SidebarAccordion
+                key={item.path}
+                item={item}
+                location={location}
+              />
             ) : (
               <Link
                 key={item.path}
@@ -151,7 +169,7 @@ export default function App() {
               >
                 {item.label}
               </Link>
-            )
+            ),
           )}
         </nav>
         {user && (
