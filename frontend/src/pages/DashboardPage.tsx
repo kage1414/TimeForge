@@ -74,6 +74,7 @@ export default function DashboardPage() {
         {data.recent_invoices.length === 0 ? (
           <p className="text-gray-500">No invoices yet</p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500 border-b">
@@ -102,6 +103,7 @@ export default function DashboardPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

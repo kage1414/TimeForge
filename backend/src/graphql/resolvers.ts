@@ -9,6 +9,7 @@ import { JWT_SECRET, Context } from '../index';
 function toISO(val: any): string | null {
   if (!val) return null;
   if (val instanceof Date) return val.toISOString();
+  if (typeof val === 'number') return new Date(val).toISOString();
   return String(val);
 }
 
@@ -257,7 +258,7 @@ export const resolvers = {
         .insert({ email: input.email, password_hash, name: input.name || null, role: 'user' })
         .returning('*');
 
-      await db('invites').where('id', invite.id).update({ used_by: user.id, used_at: new Date() });
+      await db('invites').where('id', invite.id).update({ used_by: user.id, used_at: new Date().toISOString() });
 
       // Create user_settings row for new user
       await db('user_settings').insert({ user_id: user.id });
@@ -362,7 +363,7 @@ export const resolvers = {
         .insert({
           ...input,
           user_id: user.id,
-          start_time: input.start_time || new Date(),
+          start_time: input.start_time || new Date().toISOString(),
           duration_minutes: duration,
           is_billable: input.is_billable ?? true,
         })
@@ -397,8 +398,9 @@ export const resolvers = {
       const entry = await db('time_entries').where({ id, user_id: user.id }).first();
       if (!entry) throw new Error('Time entry not found');
       if (entry.end_time) throw new Error('Timer already stopped');
-      const end_time = new Date();
-      const duration_minutes = Math.round((end_time.getTime() - new Date(entry.start_time).getTime()) / 60000);
+      const now = new Date();
+      const end_time = now.toISOString();
+      const duration_minutes = Math.round((now.getTime() - new Date(entry.start_time).getTime()) / 60000);
       const [updated] = await db('time_entries')
         .where({ id, user_id: user.id })
         .update({ end_time, duration_minutes, updated_at: db.fn.now() })
@@ -506,8 +508,8 @@ export const resolvers = {
           client_id,
           user_id: user.id,
           invoice_number,
-          issue_date: issue_date || new Date(),
-          due_date: due_date || new Date(Date.now() + 30 * 86400000),
+          issue_date: issue_date || new Date().toISOString(),
+          due_date: due_date || new Date(Date.now() + 30 * 86400000).toISOString(),
           tax_rate: tax_rate || 0,
           notes,
         })

@@ -304,7 +304,7 @@ export default function TimeEntriesPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Time Tracking</h1>
         <div className="flex gap-2">
           <button
@@ -379,7 +379,7 @@ export default function TimeEntriesPage() {
       )}
 
       {/* Filters */}
-      <div className="flex gap-3 mb-4">
+      <div className="flex flex-wrap gap-3 mb-4">
         <select
           className="border rounded p-2 text-sm"
           value={filterProject}
@@ -409,6 +409,7 @@ export default function TimeEntriesPage() {
         <p className="text-gray-500 text-center py-8">No time entries found.</p>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -505,6 +506,7 @@ export default function TimeEntriesPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

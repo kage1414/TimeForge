@@ -59,7 +59,7 @@ export default function InvitesPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Invites</h1>
         <button onClick={() => setShowCreate(true)}
           className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
@@ -93,6 +93,7 @@ export default function InvitesPage() {
       )}
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-gray-600">
@@ -130,6 +131,7 @@ export default function InvitesPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <ConfirmModal

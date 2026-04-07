@@ -44,14 +44,14 @@ export default function InvoicesPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Invoices</h1>
         <Link to="/invoices/new" className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
           Create Invoice
         </Link>
       </div>
 
-      <div className="flex gap-3 mb-4">
+      <div className="flex flex-wrap gap-3 mb-4">
         <select className="border rounded p-2 text-sm" value={filterClient} onChange={(e) => setFilterClient(e.target.value)}>
           <option value="">All Clients</option>
           {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.company}</option>)}
@@ -72,6 +72,7 @@ export default function InvoicesPage() {
         <p className="text-gray-500 text-center py-12">No invoices found.</p>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -108,6 +109,7 @@ export default function InvoicesPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

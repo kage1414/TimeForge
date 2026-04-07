@@ -42,17 +42,21 @@ const isCompiled = __filename.endsWith('.js');
 
 async function start() {
   try {
-    // If running compiled JS, fix any knex_migrations entries that were recorded
-    // with a .ts extension (from a dev run) so they resolve to the .js files.
-    if (isCompiled) {
-      await db.schema.hasTable('knex_migrations').then(async (exists) => {
-        if (exists) {
+    // Fix any knex_migrations entries whose extension doesn't match the current runtime.
+    // Compiled JS: rewrite .ts → .js. Dev (tsx): rewrite .js → .ts.
+    await db.schema.hasTable('knex_migrations').then(async (exists) => {
+      if (exists) {
+        if (isCompiled) {
           await db('knex_migrations')
             .whereRaw("name LIKE '%.ts'")
             .update({ name: db.raw("REPLACE(name, '.ts', '.js')") });
+        } else {
+          await db('knex_migrations')
+            .whereRaw("name LIKE '%.js'")
+            .update({ name: db.raw("REPLACE(name, '.js', '.ts')") });
         }
-      });
-    }
+      }
+    });
 
     await db.migrate.latest();
     console.log('Migrations complete');
