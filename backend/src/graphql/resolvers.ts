@@ -188,7 +188,8 @@ export const resolvers = {
         .where('time_entries.user_id', user.id)
         .whereNull('end_time')
         .join('projects', 'time_entries.project_id', 'projects.id')
-        .select('time_entries.*', 'projects.name as project_name');
+        .join('clients', 'projects.client_id', 'clients.id')
+        .select('time_entries.*', 'projects.name as project_name', db.raw("COALESCE(clients.name, clients.company) as client_name"));
       const unbilledEntries = await db('time_entries')
         .where('time_entries.user_id', user.id)
         .whereNull('invoice_id')
