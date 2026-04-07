@@ -190,7 +190,7 @@ export default function ProjectsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Projects</h1>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
@@ -215,6 +215,7 @@ export default function ProjectsPage() {
         <p className="text-gray-500 text-center py-12">No projects.</p>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -247,6 +248,7 @@ export default function ProjectsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

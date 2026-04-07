@@ -65,7 +65,7 @@ export default function CreditsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Credits</h1>
         <button
           onClick={() => setShowForm(!showForm)}
@@ -102,6 +102,7 @@ export default function CreditsPage() {
         <p className="text-gray-500 text-center py-12">No credits yet.</p>
       ) : (
         <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -138,6 +139,7 @@ export default function CreditsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

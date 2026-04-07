@@ -159,7 +159,7 @@ export default function ClientsPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold">Clients</h1>
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
@@ -177,6 +177,7 @@ export default function ClientsPage() {
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left text-gray-600">
@@ -212,6 +213,7 @@ export default function ClientsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {editing && <EditClientModal client={editing} onClose={() => setEditing(null)} />}
