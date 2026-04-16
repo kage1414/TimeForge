@@ -10,7 +10,7 @@ const DASHBOARD_QUERY = `
     dashboard {
       total_clients
       active_projects
-      running_timers { id project_id project_name client_name description start_time }
+      running_timers { id project_id project_name client_name description start_time default_rate rate_override }
       unbilled_hours
       unbilled_amount
       recent_invoices { id invoice_number client_name total status }
@@ -20,8 +20,9 @@ const DASHBOARD_QUERY = `
 `;
 
 const PROJECTS_QUERY = `query { projects(is_active: true) { id name client_name client_id } }`;
+const USER_SETTINGS_QUERY = `query { userSettings { show_earnings_on_timer } }`;
 
-function ElapsedTime({ startTime }: { startTime: string }) {
+function ElapsedTime({ startTime, rate, showEarnings }: { startTime: string; rate?: number; showEarnings?: boolean }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -32,9 +33,13 @@ function ElapsedTime({ startTime }: { startTime: string }) {
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
   const pad = (n: number) => String(n).padStart(2, "0");
+  const earnings = rate != null ? (elapsed / 3600) * rate : null;
   return (
     <span className="font-mono text-green-700 text-xl font-bold">
       {pad(h)}:{pad(m)}:{pad(s)}
+      {showEarnings && earnings != null && (
+        <span className="ml-2 text-green-600">${earnings.toFixed(2)}</span>
+      )}
     </span>
   );
 }
@@ -55,6 +60,12 @@ export default function DashboardPage() {
     queryKey: ["projects"],
     queryFn: async () =>
       (await gql<{ projects: Project[] }>(PROJECTS_QUERY)).projects,
+  });
+
+  const { data: userSettings } = useQuery<{ show_earnings_on_timer: boolean }>({
+    queryKey: ["userSettings"],
+    queryFn: async () =>
+      (await gql<{ userSettings: { show_earnings_on_timer: boolean } }>(USER_SETTINGS_QUERY)).userSettings,
   });
 
   const startTimer = useMutation({
@@ -153,7 +164,11 @@ export default function DashboardPage() {
                 )}
                 <div className="mt-2">
                   {timer.start_time && (
-                    <ElapsedTime startTime={timer.start_time} />
+                    <ElapsedTime
+                      startTime={timer.start_time}
+                      rate={timer.rate_override ?? timer.default_rate}
+                      showEarnings={userSettings?.show_earnings_on_timer}
+                    />
                   )}
                 </div>
               </div>
