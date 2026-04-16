@@ -121,6 +121,7 @@ export interface UserSettings {
   smtp_from_name: string | null;
   default_email_template: string | null;
   show_earnings_on_timer: boolean;
+  resume_window_minutes: number;
   updated_at: string;
 }
 

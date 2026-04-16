@@ -6,6 +6,7 @@
 
 ## ✅ Done
 
+- [x] Rename "Restart" to "Resume" on time entries; add configurable resume window (default 60 min, 1-min increments); block resume on billed entries and outside window
 - [x] Setup to be sent to dockerhub (GitHub Actions workflow + docker-compose.hub.yml)
 
 - [x] Allow not billed items to be credited without requiring an invoice

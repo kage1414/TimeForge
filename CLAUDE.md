@@ -84,7 +84,7 @@ Full-stack invoicing and time-tracking application.
 - **invoices**: id, client_id, invoice_number, status (draft/sent/paid/overdue/cancelled), issue_date, due_date, subtotal, tax_rate, tax_amount, credits_applied, total, notes
 - **invoice_line_items**: id, invoice_id, description, quantity, rate, amount, time_entry_id
 - **credits**: id, client_id, amount, remaining_amount, description, source_invoice_id, applied_invoice_id
-- **user_settings**: id (single row, id=1), first_name, last_name, email, address1, address2, city, state, phone, venmo, cashapp, paypal, zelle
+- **user_settings**: id (single row, id=1), first_name, last_name, email, address1, address2, city, state, phone, venmo, cashapp, paypal, zelle, show_earnings_on_timer, resume_window_minutes (default 60)
 
 ## Key Commands
 
@@ -124,7 +124,7 @@ Single endpoint at `/graphql` (Apollo Server).
 
 - `createClient`, `updateClient`, `deleteClient`
 - `createProject`, `updateProject`, `deleteProject`
-- `createTimeEntry`, `updateTimeEntry`, `deleteTimeEntry`, `stopTimeEntry`, `restartTimeEntry`, `unbillTimeEntry`, `creditTimeEntry`
+- `createTimeEntry`, `updateTimeEntry`, `deleteTimeEntry`, `stopTimeEntry`, `restartTimeEntry` (labeled "Resume" in UI; blocked for billed entries or after `resume_window_minutes` since end_time), `unbillTimeEntry`, `creditTimeEntry`
 - `createInvoice(input)` - Creates invoice; accepts `time_entry_ids` (to bill), `credit_time_entry_ids` (to create credits applied to invoice)
 - `updateInvoiceStatus`, `deleteInvoice`
 - `createCredit`, `deleteCredit`

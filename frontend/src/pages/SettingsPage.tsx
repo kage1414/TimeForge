@@ -5,7 +5,7 @@ import { gql } from '../api/client';
 import { UserSettings, User } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
-const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template show_earnings_on_timer';
+const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template show_earnings_on_timer resume_window_minutes';
 
 const SETTINGS_QUERY = `query { userSettings { ${SETTINGS_FIELDS} } }`;
 
@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const [smtpFromName, setSmtpFromName] = useState('');
   const [emailTemplate, setEmailTemplate] = useState('');
   const [showEarningsOnTimer, setShowEarningsOnTimer] = useState(false);
+  const [resumeWindowMinutes, setResumeWindowMinutes] = useState('60');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -85,6 +86,7 @@ export default function SettingsPage() {
       setSmtpFromName(settings.smtp_from_name || '');
       setEmailTemplate(settings.default_email_template || '');
       setShowEarningsOnTimer(settings.show_earnings_on_timer ?? false);
+      setResumeWindowMinutes(String(settings.resume_window_minutes ?? 60));
     }
   }, [settings]);
 
@@ -116,6 +118,7 @@ export default function SettingsPage() {
           smtp_from_name: smtpFromName || null,
           default_email_template: emailTemplate || null,
           show_earnings_on_timer: showEarningsOnTimer,
+          resume_window_minutes: resumeWindowMinutes ? Math.max(1, Math.floor(Number(resumeWindowMinutes))) : 60,
         },
       }),
     onSuccess: () => {
@@ -258,6 +261,22 @@ export default function SettingsPage() {
             Show dollar amount on running timers
           </label>
           <p className="text-xs text-gray-400 mt-1">Display live earnings next to the elapsed time counter based on the project rate.</p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4">
+          <h2 className="font-semibold mb-4">Timer</h2>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Resume Window (minutes)</label>
+            <input
+              className="border rounded p-2 w-full md:w-48"
+              type="number"
+              min="1"
+              step="1"
+              value={resumeWindowMinutes}
+              onChange={(e) => setResumeWindowMinutes(e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">How long after a time entry ends you can still resume it. Default: 60 minutes.</p>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-4">

@@ -414,6 +414,13 @@ export const resolvers = {
       const entry = await db('time_entries').where({ id, user_id: user.id }).first();
       if (!entry) throw new Error('Time entry not found');
       if (!entry.end_time) throw new Error('Timer is already running');
+      if (entry.invoice_id) throw new Error('Cannot resume a billed time entry');
+      const settings = await db('user_settings').where('user_id', user.id).first();
+      const windowMinutes = settings?.resume_window_minutes ?? 60;
+      const minutesSinceEnd = (Date.now() - new Date(entry.end_time).getTime()) / 60000;
+      if (minutesSinceEnd > windowMinutes) {
+        throw new Error(`Resume window expired (${windowMinutes} minute limit)`);
+      }
       const runningTimer = await db('time_entries').where('user_id', user.id).whereNull('end_time').first();
       if (runningTimer) throw new Error('Another timer is already running. Stop it first.');
       const [updated] = await db('time_entries')

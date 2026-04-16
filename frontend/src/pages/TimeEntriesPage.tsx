@@ -48,7 +48,7 @@ const TIME_ENTRIES_QUERY = `
 `;
 
 const PROJECTS_QUERY = `query { projects { id name client_name is_active } }`;
-const USER_SETTINGS_QUERY = `query { userSettings { show_earnings_on_timer } }`;
+const USER_SETTINGS_QUERY = `query { userSettings { show_earnings_on_timer resume_window_minutes } }`;
 
 interface StartModalState {
   open: boolean;
@@ -133,11 +133,20 @@ export default function TimeEntriesPage() {
       (await gql<{ projects: Project[] }>(PROJECTS_QUERY)).projects,
   });
 
-  const { data: userSettings } = useQuery<Pick<UserSettings, 'show_earnings_on_timer'>>({
+  const { data: userSettings } = useQuery<Pick<UserSettings, 'show_earnings_on_timer' | 'resume_window_minutes'>>({
     queryKey: ["userSettings"],
     queryFn: async () =>
-      (await gql<{ userSettings: Pick<UserSettings, 'show_earnings_on_timer'> }>(USER_SETTINGS_QUERY)).userSettings,
+      (await gql<{ userSettings: Pick<UserSettings, 'show_earnings_on_timer' | 'resume_window_minutes'> }>(USER_SETTINGS_QUERY)).userSettings,
   });
+
+  const resumeWindowMinutes = userSettings?.resume_window_minutes ?? 60;
+
+  function canResume(e: TimeEntry): boolean {
+    if (e.invoice_id) return false;
+    if (!e.end_time) return false;
+    const minutesSinceEnd = (Date.now() - new Date(e.end_time).getTime()) / 60000;
+    return minutesSinceEnd <= resumeWindowMinutes;
+  }
 
   const vars: any = {};
   if (filterProject) vars.project_id = Number(filterProject);
@@ -256,7 +265,7 @@ export default function TimeEntriesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const restartEntry = useMutation({
+  const resumeEntry = useMutation({
     mutationFn: ({
       id,
     }: {
@@ -269,7 +278,7 @@ export default function TimeEntriesPage() {
     onSuccess: (_data, { name, desc, duration }) => {
       qc.invalidateQueries({ queryKey: ["timeEntries"] });
       toast.success(
-        `Restarted: ${name}${desc ? ` - ${desc}` : ""} (was ${duration})`,
+        `Resumed: ${name}${desc ? ` - ${desc}` : ""} (was ${duration})`,
         { duration: 4000 },
       );
     },
@@ -451,6 +460,9 @@ export default function TimeEntriesPage() {
                       </td>
                       <td className="p-3 text-right space-x-2">
                         <button onClick={() => openEditModal(e)} className="text-indigo-600 hover:underline text-sm">Edit</button>
+                        {!hasRunning && e.duration_minutes > 0 && canResume(e) && (
+                          <button onClick={() => resumeEntry.mutate({ id: e.id, name: e.project_name, desc: e.description || "", duration: formatDuration(e.duration_minutes) })} className="text-orange-600 hover:underline text-sm">Resume</button>
+                        )}
                         {e.duration_minutes > 0 && (
                           <button onClick={() => setConfirmAction({ message: `Create a $${amount.toFixed(2)} credit for this entry?`, onConfirm: () => creditEntry.mutate(e.id) })} className="text-green-600 hover:underline text-sm">Credit</button>
                         )}
@@ -509,6 +521,9 @@ export default function TimeEntriesPage() {
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0 text-xs">
                       <button onClick={() => openEditModal(e)} className="text-indigo-600 hover:underline">Edit</button>
+                      {!hasRunning && e.duration_minutes > 0 && canResume(e) && (
+                        <button onClick={() => resumeEntry.mutate({ id: e.id, name: e.project_name, desc: e.description || "", duration: formatDuration(e.duration_minutes) })} className="text-orange-600 hover:underline">Resume</button>
+                      )}
                       {e.duration_minutes > 0 && (
                         <button onClick={() => setConfirmAction({ message: `Create a $${amount.toFixed(2)} credit for this entry?`, onConfirm: () => creditEntry.mutate(e.id) })} className="text-green-600 hover:underline">Credit</button>
                       )}
