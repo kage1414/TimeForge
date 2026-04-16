@@ -149,7 +149,10 @@ export default function App() {
     {
       path: "/clients",
       label: "Clients",
-      children: [{ path: "/projects", label: "Projects" }],
+      children: [
+        { path: "/clients", label: "Clients" },
+        { path: "/projects", label: "Projects" },
+      ],
     },
     {
       path: "/invoices",
@@ -164,8 +167,11 @@ export default function App() {
       path: "/settings",
       label: "Settings",
       children: isAdmin
-        ? [{ path: "/admin/invites", label: "Invites" }]
-        : undefined,
+        ? [
+            { path: "/settings", label: "Settings" },
+            { path: "/admin/invites", label: "Invites" },
+          ]
+        : [{ path: "/settings", label: "Settings" }],
     },
   ];
 
