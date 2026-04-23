@@ -39,7 +39,8 @@
       "Bash(git push:*)",
       "Bash(git remote:*)",
       "Bash(grep -l \"<table\\\\|grid-cols-\" /Users/kylejohnson/code/TimeForge/frontend/src/pages/*.tsx)",
-      "Bash(wc -l /Users/kylejohnson/code/TimeForge/frontend/src/pages/*.tsx)"
+      "Bash(wc -l /Users/kylejohnson/code/TimeForge/frontend/src/pages/*.tsx)",
+      "Bash(yarn tsc *)"
     ]
   }
 }
