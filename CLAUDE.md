@@ -84,7 +84,8 @@ Full-stack invoicing and time-tracking application.
 - **invoices**: id, client_id, invoice_number, status (draft/sent/paid/overdue/cancelled), issue_date, due_date, subtotal, tax_rate, tax_amount, credits_applied, total, notes
 - **invoice_line_items**: id, invoice_id, description, quantity, rate, amount, time_entry_id
 - **credits**: id, client_id, amount, remaining_amount, description, source_invoice_id, applied_invoice_id
-- **user_settings**: id (single row, id=1), first_name, last_name, email, address1, address2, city, state, phone, venmo, cashapp, paypal, zelle, show_earnings_on_timer, resume_window_minutes (default 60)
+- **user_settings**: id (single row, id=1), first_name, last_name, email, address1, address2, city, state, phone, venmo, cashapp, paypal, zelle, show_earnings_on_timer, resume_window_minutes (default 60), consolidate_hours (default false — when true, invoice creation merges same-day time entries per project+rate into one line item)
+- **invoices** stores a `consolidate_hours` boolean snapshot captured from user settings at creation time; unbillTimeEntry rebuilds consolidated line items (time_entry_id=NULL) when invoice was created with consolidation on
 
 ## Key Commands
 

@@ -67,6 +67,7 @@ export interface Invoice {
   total: number;
   notes: string;
   payment_method?: string | null;
+  consolidate_hours?: boolean;
   line_items?: LineItem[];
   credits?: Credit[];
   created_at: string;
@@ -122,6 +123,7 @@ export interface UserSettings {
   default_email_template: string | null;
   show_earnings_on_timer: boolean;
   resume_window_minutes: number;
+  consolidate_hours: boolean;
   updated_at: string;
 }
 

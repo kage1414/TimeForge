@@ -446,6 +446,56 @@ export const resolvers = {
         .where({ id, user_id: user.id })
         .update({ invoice_id: null, updated_at: db.fn.now() })
         .returning('*');
+
+      if (invoice?.consolidate_hours) {
+        await db('invoice_line_items')
+          .where({ invoice_id: invoice.id })
+          .whereNull('time_entry_id')
+          .del();
+        const remaining = await db('time_entries')
+          .join('projects', 'time_entries.project_id', 'projects.id')
+          .select('time_entries.*', 'projects.default_rate', 'projects.name as project_name')
+          .where('time_entries.invoice_id', invoice.id)
+          .where('time_entries.user_id', user.id)
+          .whereNull('time_entries.flat_amount');
+        const groups = new Map<string, { project_name: string; date: string | null; rate: number; total_minutes: number; descriptions: string[] }>();
+        for (const e of remaining) {
+          const entryDate = e.start_time
+            ? new Date(e.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : null;
+          const rate = Number(e.rate_override ?? e.default_rate);
+          const key = `${e.project_id}|${entryDate ?? ''}|${rate}`;
+          const existing = groups.get(key);
+          if (existing) {
+            existing.total_minutes += Number(e.duration_minutes || 0);
+            if (e.description) existing.descriptions.push(e.description);
+          } else {
+            groups.set(key, {
+              project_name: e.project_name,
+              date: entryDate,
+              rate,
+              total_minutes: Number(e.duration_minutes || 0),
+              descriptions: e.description ? [e.description] : [],
+            });
+          }
+        }
+        for (const group of groups.values()) {
+          const hours = group.total_minutes / 60;
+          const quantity = parseFloat(hours.toFixed(2));
+          const amount = hours * group.rate;
+          const descPrefix = group.date ? `${group.project_name} - ${group.date}` : group.project_name;
+          const descBody = group.descriptions.length ? '\n' + group.descriptions.map((d) => `- ${d}`).join('\n') : '';
+          await db('invoice_line_items').insert({
+            invoice_id: invoice.id,
+            description: `${descPrefix}${descBody}`,
+            quantity,
+            rate: group.rate,
+            amount: parseFloat(amount.toFixed(2)),
+            time_entry_id: null,
+          });
+        }
+      }
+
       if (invoice) {
         const lineItems = await db('invoice_line_items').where('invoice_id', invoice.id);
         const subtotal = lineItems.reduce((sum: number, li: any) => sum + Number(li.amount), 0);
@@ -496,6 +546,9 @@ export const resolvers = {
       const user = requireAuth(context);
       const { client_id, invoice_number: customNumber, issue_date, due_date, tax_rate, notes, time_entry_ids, credit_ids, credit_time_entry_ids } = input;
 
+      const settings = await db('user_settings').where('user_id', user.id).first();
+      const consolidate = !!settings?.consolidate_hours;
+
       let invoice_number: string;
       if (customNumber) {
         const existing = await db('invoices').where({ invoice_number: customNumber, user_id: user.id }).first();
@@ -520,6 +573,7 @@ export const resolvers = {
           due_date: due_date || new Date(Date.now() + 30 * 86400000).toISOString(),
           tax_rate: tax_rate || 0,
           notes,
+          consolidate_hours: consolidate,
         })
         .returning('*');
 
@@ -531,33 +585,82 @@ export const resolvers = {
           .select('time_entries.*', 'projects.default_rate', 'projects.name as project_name')
           .whereIn('time_entries.id', time_entry_ids)
           .where('time_entries.user_id', user.id);
+
+        const hourlyGroups = new Map<string, { project_name: string; date: string | null; rate: number; total_minutes: number; descriptions: string[] }>();
+
         for (const entry of entries) {
           const entryDate = entry.start_time
             ? new Date(entry.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
             : null;
-          const descSuffix = entry.description ? '\n' + entry.description : '';
-          const descPrefix = entryDate ? `${entry.project_name} - ${entryDate}` : entry.project_name;
-          let quantity: number, rate: number, amount: number;
+
           if (entry.flat_amount != null) {
-            quantity = 1;
-            rate = parseFloat(Number(entry.flat_amount).toFixed(2));
-            amount = rate;
+            const rate = parseFloat(Number(entry.flat_amount).toFixed(2));
+            const descSuffix = entry.description ? '\n' + entry.description : '';
+            const descPrefix = entryDate ? `${entry.project_name} - ${entryDate}` : entry.project_name;
+            await db('invoice_line_items').insert({
+              invoice_id: invoice.id,
+              description: `${descPrefix}${descSuffix}`,
+              quantity: 1,
+              rate,
+              amount: rate,
+              time_entry_id: entry.id,
+            });
+            subtotal += rate;
           } else {
-            rate = entry.rate_override ?? entry.default_rate;
-            const hours = (entry.duration_minutes || 0) / 60;
-            quantity = parseFloat(hours.toFixed(2));
-            amount = hours * rate;
+            const rate = Number(entry.rate_override ?? entry.default_rate);
+            if (consolidate) {
+              const key = `${entry.project_id}|${entryDate ?? ''}|${rate}`;
+              const existing = hourlyGroups.get(key);
+              if (existing) {
+                existing.total_minutes += Number(entry.duration_minutes || 0);
+                if (entry.description) existing.descriptions.push(entry.description);
+              } else {
+                hourlyGroups.set(key, {
+                  project_name: entry.project_name,
+                  date: entryDate,
+                  rate,
+                  total_minutes: Number(entry.duration_minutes || 0),
+                  descriptions: entry.description ? [entry.description] : [],
+                });
+              }
+            } else {
+              const hours = (entry.duration_minutes || 0) / 60;
+              const quantity = parseFloat(hours.toFixed(2));
+              const amount = hours * rate;
+              const descSuffix = entry.description ? '\n' + entry.description : '';
+              const descPrefix = entryDate ? `${entry.project_name} - ${entryDate}` : entry.project_name;
+              await db('invoice_line_items').insert({
+                invoice_id: invoice.id,
+                description: `${descPrefix}${descSuffix}`,
+                quantity,
+                rate,
+                amount: parseFloat(amount.toFixed(2)),
+                time_entry_id: entry.id,
+              });
+              subtotal += amount;
+            }
           }
-          await db('invoice_line_items').insert({
-            invoice_id: invoice.id,
-            description: `${descPrefix}${descSuffix}`,
-            quantity,
-            rate,
-            amount: parseFloat(amount.toFixed(2)),
-            time_entry_id: entry.id,
-          });
+
           await db('time_entries').where('id', entry.id).update({ invoice_id: invoice.id });
-          subtotal += amount;
+        }
+
+        if (consolidate) {
+          for (const group of hourlyGroups.values()) {
+            const hours = group.total_minutes / 60;
+            const quantity = parseFloat(hours.toFixed(2));
+            const amount = hours * group.rate;
+            const descPrefix = group.date ? `${group.project_name} - ${group.date}` : group.project_name;
+            const descBody = group.descriptions.length ? '\n' + group.descriptions.map((d) => `- ${d}`).join('\n') : '';
+            await db('invoice_line_items').insert({
+              invoice_id: invoice.id,
+              description: `${descPrefix}${descBody}`,
+              quantity,
+              rate: group.rate,
+              amount: parseFloat(amount.toFixed(2)),
+              time_entry_id: null,
+            });
+            subtotal += amount;
+          }
         }
       }
 

@@ -90,6 +90,7 @@ export const typeDefs = `#graphql
     total: Float!
     notes: String
     payment_method: String
+    consolidate_hours: Boolean!
     line_items: [LineItem!]
     credits: [Credit!]
     created_at: String!
@@ -133,6 +134,7 @@ export const typeDefs = `#graphql
     default_email_template: String
     show_earnings_on_timer: Boolean
     resume_window_minutes: Int
+    consolidate_hours: Boolean
     updated_at: String!
   }
 
@@ -162,6 +164,7 @@ export const typeDefs = `#graphql
     default_email_template: String
     show_earnings_on_timer: Boolean
     resume_window_minutes: Int
+    consolidate_hours: Boolean
   }
 
   type User {
