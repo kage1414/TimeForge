@@ -78,8 +78,8 @@ export interface LineItem {
   id: number;
   invoice_id: number;
   description: string;
-  quantity: number;
-  rate: number;
+  quantity: number | null;
+  rate: number | null;
   amount: number;
   time_entry_id: number | null;
 }

@@ -191,9 +191,10 @@ export const resolvers = {
         .join('projects', 'time_entries.project_id', 'projects.id')
         .join('clients', 'projects.client_id', 'clients.id')
         .select('time_entries.*', 'projects.name as project_name', db.raw("COALESCE(clients.name, clients.company) as client_name"));
-      const unbilledEntries = await db('time_entries')
+      const unbilledHourly = await db('time_entries')
         .where('time_entries.user_id', user.id)
         .whereNull('invoice_id')
+        .whereNull('flat_amount')
         .where('is_billable', true)
         .whereNotNull('end_time')
         .join('projects', 'time_entries.project_id', 'projects.id')
@@ -201,6 +202,12 @@ export const resolvers = {
           db.raw('SUM(time_entries.duration_minutes) as total_minutes'),
           db.raw('SUM(time_entries.duration_minutes / 60.0 * COALESCE(time_entries.rate_override, projects.default_rate)) as total_amount')
         );
+      const unbilledFlat = await db('time_entries')
+        .where('user_id', user.id)
+        .whereNull('invoice_id')
+        .whereNotNull('flat_amount')
+        .where('is_billable', true)
+        .sum('flat_amount as total_amount');
       const recentInvoices = await db('invoices')
         .where('invoices.user_id', user.id)
         .join('clients', 'invoices.client_id', 'clients.id')
@@ -215,8 +222,8 @@ export const resolvers = {
         total_clients: Number(totalClients.count),
         active_projects: Number(totalProjects.count),
         running_timers: runningTimers,
-        unbilled_hours: parseFloat(((unbilledEntries[0]?.total_minutes || 0) / 60).toFixed(2)),
-        unbilled_amount: parseFloat(parseFloat(unbilledEntries[0]?.total_amount || '0').toFixed(2)),
+        unbilled_hours: parseFloat(((unbilledHourly[0]?.total_minutes || 0) / 60).toFixed(2)),
+        unbilled_amount: parseFloat((parseFloat(unbilledHourly[0]?.total_amount || '0') + parseFloat(unbilledFlat[0]?.total_amount || '0')).toFixed(2)),
         recent_invoices: recentInvoices,
         outstanding_amount: parseFloat(outstandingAmount[0]?.total || '0'),
       };
@@ -359,7 +366,7 @@ export const resolvers = {
       const user = requireAuth(context);
       const isFlat = input.flat_amount != null;
       let duration = input.duration_minutes;
-      if (!duration && input.start_time && input.end_time) {
+      if (!isFlat && !duration && input.start_time && input.end_time) {
         duration = Math.round((new Date(input.end_time).getTime() - new Date(input.start_time).getTime()) / 60000);
       }
       const [entry] = await db('time_entries')
@@ -367,7 +374,7 @@ export const resolvers = {
           ...input,
           user_id: user.id,
           start_time: input.start_time || (isFlat ? null : new Date().toISOString()),
-          duration_minutes: duration,
+          duration_minutes: isFlat ? 0 : duration,
           is_billable: input.is_billable ?? true,
         })
         .returning('*');
@@ -376,17 +383,20 @@ export const resolvers = {
 
     updateTimeEntry: async (_: any, { id, input }: any, context: Context) => {
       const user = requireAuth(context);
+      const existing = await db('time_entries').where({ id, user_id: user.id }).first();
+      if (!existing) throw new Error('Time entry not found');
+      const isFlat = (input.flat_amount ?? existing.flat_amount) != null;
       let duration = input.duration_minutes;
-      if (!duration && input.start_time && input.end_time) {
+      if (!isFlat && !duration && input.start_time && input.end_time) {
         duration = Math.round((new Date(input.end_time).getTime() - new Date(input.start_time).getTime()) / 60000);
       }
       const updateData: any = { ...input, updated_at: db.fn.now() };
-      if (duration !== undefined) updateData.duration_minutes = duration;
+      if (isFlat) updateData.duration_minutes = 0;
+      else if (duration !== undefined) updateData.duration_minutes = duration;
       const [entry] = await db('time_entries')
         .where({ id, user_id: user.id })
         .update(updateData)
         .returning('*');
-      if (!entry) throw new Error('Time entry not found');
       return entry;
     },
 
@@ -597,7 +607,7 @@ export const resolvers = {
 
           if (entry.flat_amount != null) {
             const fmtUtc = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-            const rate = parseFloat(Number(entry.flat_amount).toFixed(2));
+            const amount = parseFloat(Number(entry.flat_amount).toFixed(2));
             const descSuffix = entry.description ? '\n' + entry.description : '';
             const flatDateLabel = entry.start_time && entry.end_time && entry.start_time !== entry.end_time
               ? `${fmtUtc(entry.start_time)} – ${fmtUtc(entry.end_time)}`
@@ -606,12 +616,12 @@ export const resolvers = {
             await db('invoice_line_items').insert({
               invoice_id: invoice.id,
               description: `${descPrefix}${descSuffix}`,
-              quantity: 1,
-              rate,
-              amount: rate,
+              quantity: null,
+              rate: null,
+              amount,
               time_entry_id: entry.id,
             });
-            subtotal += rate;
+            subtotal += amount;
           } else {
             const rate = Number(entry.rate_override ?? entry.default_rate);
             if (consolidate) {
@@ -691,13 +701,13 @@ export const resolvers = {
             ? `${fmt(entry.start_time)} – ${fmt(entry.end_time)}`
             : entry.start_time ? fmt(entry.start_time) : null;
           const creditDescPrefix = dateLabel ? `Credit: ${entry.project_name} - ${dateLabel}` : `Credit: ${entry.project_name}`;
-          const creditRate = entry.flat_amount != null ? amount : (entry.rate_override ?? entry.default_rate);
-          const creditQty = entry.flat_amount != null ? 1 : parseFloat(((entry.duration_minutes || 0) / 60).toFixed(2));
+          const creditQty = isFlat ? null : parseFloat(((entry.duration_minutes || 0) / 60).toFixed(2));
+          const creditRate = isFlat ? null : -Number(entry.rate_override ?? entry.default_rate);
           await db('invoice_line_items').insert({
             invoice_id: invoice.id,
             description: `${creditDescPrefix}${entry.description ? '\n' + entry.description : ''}`,
             quantity: creditQty,
-            rate: -Number(creditRate),
+            rate: creditRate,
             amount: parseFloat((-amount).toFixed(2)),
             time_entry_id: entry.id,
           });
@@ -843,7 +853,7 @@ export const resolvers = {
         <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;color:#111827">
           ${bodyHtml}
           <h1 style="color:#4f46e5;font-size:24px">Invoice #${invoice.invoice_number}</h1>
-          <p style="color:#6b7280">To: <strong>${invoice.client_name}</strong>${invoice.client_company ? ` (${invoice.client_company})` : ''}</p>
+          <p style="color:#6b7280">To: <strong>${invoice.client_name}</strong>${invoice.client_company && invoice.client_company !== invoice.client_name ? ` (${invoice.client_company})` : ''}</p>
           <p style="color:#6b7280">Issue Date: ${issueDate} &nbsp;|&nbsp; Due: ${dueDate}</p>
           <table style="width:100%;border-collapse:collapse;margin:16px 0">
             <thead>

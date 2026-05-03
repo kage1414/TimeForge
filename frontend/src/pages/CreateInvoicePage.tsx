@@ -13,8 +13,8 @@ const SETTINGS_QUERY = `query { userSettings { default_due_days } }`;
 const UNBILLED_ENTRIES_QUERY = `
   query($client_id: Int, $unbilled: Boolean) {
     timeEntries(client_id: $client_id, unbilled: $unbilled) {
-      id project_id project_name description start_time
-      duration_minutes rate_override default_rate
+      id project_id project_name description start_time end_time
+      duration_minutes rate_override default_rate flat_amount
     }
   }
 `;
@@ -22,8 +22,8 @@ const UNBILLED_ENTRIES_QUERY = `
 const BILLED_ENTRIES_QUERY = `
   query($client_id: Int, $billed: Boolean) {
     timeEntries(client_id: $client_id, billed: $billed) {
-      id project_id project_name description start_time
-      duration_minutes rate_override default_rate
+      id project_id project_name description start_time end_time
+      duration_minutes rate_override default_rate flat_amount
     }
   }
 `;
@@ -146,8 +146,20 @@ export default function CreateInvoicePage() {
   }
 
   function entryAmount(e: TimeEntry): number {
+    if (e.flat_amount != null) return Number(e.flat_amount);
     const rate = e.rate_override ?? e.default_rate;
     return (e.duration_minutes / 60) * Number(rate);
+  }
+
+  function formatEntryDate(e: TimeEntry): string {
+    if (!e.start_time) return '—';
+    const opts = e.flat_amount != null ? { timeZone: 'UTC' as const } : undefined;
+    const start = new Date(e.start_time).toLocaleDateString(undefined, opts);
+    if (e.flat_amount != null && e.end_time && e.end_time !== e.start_time) {
+      const end = new Date(e.end_time).toLocaleDateString(undefined, opts);
+      return `${start} – ${end}`;
+    }
+    return start;
   }
 
   const billAmount = unbilledEntries
@@ -230,17 +242,18 @@ export default function CreateInvoicePage() {
                 </thead>
                 <tbody>
                   {unbilledEntries.map((e) => {
+                    const isFlat = e.flat_amount != null;
                     const rate = e.rate_override ?? e.default_rate;
-                    const hours = e.duration_minutes / 60;
-                    const amount = hours * Number(rate);
+                    const hours = isFlat ? 0 : e.duration_minutes / 60;
+                    const amount = entryAmount(e);
                     const action = entryActions.get(e.id);
                     return (
                       <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50">
                         <td className="py-2">{e.project_name}</td>
                         <td className="py-2">{e.description || '-'}</td>
-                        <td className="py-2">{e.start_time ? new Date(e.start_time).toLocaleDateString() : '—'}</td>
-                        <td className="py-2 text-right">{hours.toFixed(2)}</td>
-                        <td className="py-2 text-right">${Number(rate).toFixed(2)}</td>
+                        <td className="py-2">{formatEntryDate(e)}</td>
+                        <td className="py-2 text-right">{isFlat ? '—' : hours.toFixed(2)}</td>
+                        <td className="py-2 text-right">{isFlat ? '—' : `$${Number(rate).toFixed(2)}`}</td>
                         <td className="py-2 text-right">${amount.toFixed(2)}</td>
                         <td className="py-2 text-center space-x-1">
                           <button onClick={() => toggleEntryAction(e.id, 'bill')}
@@ -279,9 +292,10 @@ export default function CreateInvoicePage() {
                 </thead>
                 <tbody>
                   {billedEntries.map((e) => {
+                    const isFlat = e.flat_amount != null;
                     const rate = e.rate_override ?? e.default_rate;
-                    const hours = e.duration_minutes / 60;
-                    const amount = hours * Number(rate);
+                    const hours = isFlat ? 0 : e.duration_minutes / 60;
+                    const amount = entryAmount(e);
                     return (
                       <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => toggleBilledCredit(e.id)}>
                         <td className="py-2">
@@ -289,9 +303,9 @@ export default function CreateInvoicePage() {
                         </td>
                         <td className="py-2">{e.project_name}</td>
                         <td className="py-2">{e.description || '-'}</td>
-                        <td className="py-2">{e.start_time ? new Date(e.start_time).toLocaleDateString() : '—'}</td>
-                        <td className="py-2 text-right">{hours.toFixed(2)}</td>
-                        <td className="py-2 text-right">${Number(rate).toFixed(2)}</td>
+                        <td className="py-2">{formatEntryDate(e)}</td>
+                        <td className="py-2 text-right">{isFlat ? '—' : hours.toFixed(2)}</td>
+                        <td className="py-2 text-right">{isFlat ? '—' : `$${Number(rate).toFixed(2)}`}</td>
                         <td className="py-2 text-right">${amount.toFixed(2)}</td>
                       </tr>
                     );
