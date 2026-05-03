@@ -6,6 +6,10 @@
 
 ## ✅ Done
 
+- [x] Fix non-time-based "Add Entry" appearing as a running timer; flat-amount entries now have null start_time/end_time and are excluded from running timer lists/checks
+- [x] Optional date range on non-time-based entries: Add Entry modal shows two optional date inputs when not time-based; entry list and invoice line items render the range (or single date) when present
+- [x] Add "Consolidate hours" user setting; when enabled, invoice creation merges same-day time entries (per project + rate) into a single line item; unbill on consolidated invoices regenerates consolidated line items
+- [x] Rename "Restart" to "Resume" on time entries; add configurable resume window (default 60 min, 1-min increments); block resume on billed entries and outside window
 - [x] Setup to be sent to dockerhub (GitHub Actions workflow + docker-compose.hub.yml)
 
 - [x] Allow not billed items to be credited without requiring an invoice

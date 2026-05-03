@@ -48,7 +48,7 @@ const TIME_ENTRIES_QUERY = `
 `;
 
 const PROJECTS_QUERY = `query { projects { id name client_name is_active } }`;
-const USER_SETTINGS_QUERY = `query { userSettings { show_earnings_on_timer } }`;
+const USER_SETTINGS_QUERY = `query { userSettings { show_earnings_on_timer resume_window_minutes } }`;
 
 interface StartModalState {
   open: boolean;
@@ -133,11 +133,20 @@ export default function TimeEntriesPage() {
       (await gql<{ projects: Project[] }>(PROJECTS_QUERY)).projects,
   });
 
-  const { data: userSettings } = useQuery<Pick<UserSettings, 'show_earnings_on_timer'>>({
+  const { data: userSettings } = useQuery<Pick<UserSettings, 'show_earnings_on_timer' | 'resume_window_minutes'>>({
     queryKey: ["userSettings"],
     queryFn: async () =>
-      (await gql<{ userSettings: Pick<UserSettings, 'show_earnings_on_timer'> }>(USER_SETTINGS_QUERY)).userSettings,
+      (await gql<{ userSettings: Pick<UserSettings, 'show_earnings_on_timer' | 'resume_window_minutes'> }>(USER_SETTINGS_QUERY)).userSettings,
   });
+
+  const resumeWindowMinutes = userSettings?.resume_window_minutes ?? 60;
+
+  function canResume(e: TimeEntry): boolean {
+    if (e.invoice_id) return false;
+    if (!e.end_time) return false;
+    const minutesSinceEnd = (Date.now() - new Date(e.end_time).getTime()) / 60000;
+    return minutesSinceEnd <= resumeWindowMinutes;
+  }
 
   const vars: any = {};
   if (filterProject) vars.project_id = Number(filterProject);
@@ -184,8 +193,8 @@ export default function TimeEntriesPage() {
           input: {
             project_id: Number(addModal.projectId),
             description: addModal.description || null,
-            start_time: addModal.isTimeBased && addModal.startTime ? new Date(addModal.startTime).toISOString() : null,
-            end_time: addModal.isTimeBased && addModal.endTime ? new Date(addModal.endTime).toISOString() : null,
+            start_time: addModal.startTime ? new Date(addModal.startTime).toISOString() : null,
+            end_time: addModal.endTime ? new Date(addModal.endTime).toISOString() : null,
             is_billable: addModal.isBillable,
             rate_override: addModal.isTimeBased && addModal.rateOverride ? Number(addModal.rateOverride) : null,
             flat_amount: !addModal.isTimeBased && addModal.flatAmount ? Number(addModal.flatAmount) : null,
@@ -256,7 +265,7 @@ export default function TimeEntriesPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const restartEntry = useMutation({
+  const resumeEntry = useMutation({
     mutationFn: ({
       id,
     }: {
@@ -269,7 +278,7 @@ export default function TimeEntriesPage() {
     onSuccess: (_data, { name, desc, duration }) => {
       qc.invalidateQueries({ queryKey: ["timeEntries"] });
       toast.success(
-        `Restarted: ${name}${desc ? ` - ${desc}` : ""} (was ${duration})`,
+        `Resumed: ${name}${desc ? ` - ${desc}` : ""} (was ${duration})`,
         { duration: 4000 },
       );
     },
@@ -286,6 +295,10 @@ export default function TimeEntriesPage() {
     return new Date(iso).toLocaleString();
   }
 
+  function formatDate(iso: string): string {
+    return new Date(iso).toLocaleDateString(undefined, { timeZone: 'UTC' });
+  }
+
   function openEditModal(e: TimeEntry) {
     setEditModal({
       open: true,
@@ -299,8 +312,8 @@ export default function TimeEntriesPage() {
     });
   }
 
-  const running = entries.filter((e) => !e.end_time);
-  const completed = entries.filter((e) => e.end_time);
+  const running = entries.filter((e) => !e.end_time && e.flat_amount == null);
+  const completed = entries.filter((e) => e.end_time || e.flat_amount != null);
   const hasRunning = running.length > 0;
 
   return (
@@ -439,8 +452,8 @@ export default function TimeEntriesPage() {
                     <tr key={e.id} className="border-t hover:bg-gray-50">
                       <td className="p-3 font-medium">{e.project_name}</td>
                       <td className="p-3 max-w-[160px] truncate" title={e.description || ""}>{e.description || "-"}</td>
-                      <td className="p-3">{e.start_time ? formatTime(e.start_time) : "—"}</td>
-                      <td className="p-3">{e.end_time ? formatTime(e.end_time) : "—"}</td>
+                      <td className="p-3">{e.start_time ? (isFlat ? formatDate(e.start_time) : formatTime(e.start_time)) : "—"}</td>
+                      <td className="p-3">{e.end_time ? (isFlat ? formatDate(e.end_time) : formatTime(e.end_time)) : "—"}</td>
                       <td className="p-3">{isFlat ? "—" : formatDuration(e.duration_minutes)}</td>
                       <td className="p-3">{isFlat ? "—" : `$${Number(rate).toFixed(2)}/hr`}</td>
                       <td className="p-3">${amount.toFixed(2)}</td>
@@ -451,6 +464,9 @@ export default function TimeEntriesPage() {
                       </td>
                       <td className="p-3 text-right space-x-2">
                         <button onClick={() => openEditModal(e)} className="text-indigo-600 hover:underline text-sm">Edit</button>
+                        {!hasRunning && e.duration_minutes > 0 && canResume(e) && (
+                          <button onClick={() => resumeEntry.mutate({ id: e.id, name: e.project_name, desc: e.description || "", duration: formatDuration(e.duration_minutes) })} className="text-orange-600 hover:underline text-sm">Resume</button>
+                        )}
                         {e.duration_minutes > 0 && (
                           <button onClick={() => setConfirmAction({ message: `Create a $${amount.toFixed(2)} credit for this entry?`, onConfirm: () => creditEntry.mutate(e.id) })} className="text-green-600 hover:underline text-sm">Credit</button>
                         )}
@@ -473,8 +489,8 @@ export default function TimeEntriesPage() {
               const amount = isFlat ? Number(e.flat_amount) : (e.duration_minutes / 60) * Number(rate);
               const tooltip = [
                 e.description ? `Description: ${e.description}` : null,
-                e.start_time ? `Start: ${formatTime(e.start_time)}` : null,
-                e.end_time ? `End: ${formatTime(e.end_time)}` : null,
+                e.start_time ? `Start: ${isFlat ? formatDate(e.start_time) : formatTime(e.start_time)}` : null,
+                e.end_time ? `End: ${isFlat ? formatDate(e.end_time) : formatTime(e.end_time)}` : null,
                 !isFlat ? `Rate: $${Number(rate).toFixed(2)}/hr` : null,
                 !isFlat ? `Duration: ${formatDuration(e.duration_minutes)}` : null,
                 `Client: ${e.client_name}`,
@@ -509,6 +525,9 @@ export default function TimeEntriesPage() {
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0 text-xs">
                       <button onClick={() => openEditModal(e)} className="text-indigo-600 hover:underline">Edit</button>
+                      {!hasRunning && e.duration_minutes > 0 && canResume(e) && (
+                        <button onClick={() => resumeEntry.mutate({ id: e.id, name: e.project_name, desc: e.description || "", duration: formatDuration(e.duration_minutes) })} className="text-orange-600 hover:underline">Resume</button>
+                      )}
                       {e.duration_minutes > 0 && (
                         <button onClick={() => setConfirmAction({ message: `Create a $${amount.toFixed(2)} credit for this entry?`, onConfirm: () => creditEntry.mutate(e.id) })} className="text-green-600 hover:underline">Credit</button>
                       )}
@@ -795,6 +814,11 @@ export default function TimeEntriesPage() {
                   toast.error('End time must be after start time');
                   return;
                 }
+                if (!addModal.isTimeBased && addModal.startTime && addModal.endTime &&
+                    new Date(addModal.endTime) < new Date(addModal.startTime)) {
+                  toast.error('End date must be on or after start date');
+                  return;
+                }
                 addEntry.mutate();
               }}
               className="space-y-4"
@@ -826,28 +850,51 @@ export default function TimeEntriesPage() {
                 <input
                   type="checkbox"
                   checked={addModal.isTimeBased}
-                  onChange={(e) => setAddModal({ ...addModal, isTimeBased: e.target.checked })}
+                  onChange={(e) => setAddModal({ ...addModal, isTimeBased: e.target.checked, startTime: "", endTime: "" })}
                 />
                 Time-based entry
               </label>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
-                <input
-                  className="border rounded p-2 w-full"
-                  type="datetime-local"
-                  value={addModal.startTime}
-                  onChange={(e) => setAddModal({ ...addModal, startTime: e.target.value })}
-                />
-              </div>
-              {addModal.isTimeBased && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                  <input
-                    className="border rounded p-2 w-full"
-                    type="datetime-local"
-                    value={addModal.endTime}
-                    onChange={(e) => setAddModal({ ...addModal, endTime: e.target.value })}
-                  />
+              {addModal.isTimeBased ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                    <input
+                      className="border rounded p-2 w-full"
+                      type="datetime-local"
+                      value={addModal.startTime}
+                      onChange={(e) => setAddModal({ ...addModal, startTime: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                    <input
+                      className="border rounded p-2 w-full"
+                      type="datetime-local"
+                      value={addModal.endTime}
+                      onChange={(e) => setAddModal({ ...addModal, endTime: e.target.value })}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <input
+                      className="border rounded p-2 w-full"
+                      type="date"
+                      value={addModal.startTime}
+                      onChange={(e) => setAddModal({ ...addModal, startTime: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <input
+                      className="border rounded p-2 w-full"
+                      type="date"
+                      value={addModal.endTime}
+                      onChange={(e) => setAddModal({ ...addModal, endTime: e.target.value })}
+                    />
+                  </div>
                 </div>
               )}
               {addModal.isTimeBased ? (
