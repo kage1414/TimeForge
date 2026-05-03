@@ -50,8 +50,8 @@ export const typeDefs = `#graphql
     id: Int!
     invoice_id: Int!
     description: String!
-    quantity: Float!
-    rate: Float!
+    quantity: Float
+    rate: Float
     amount: Float!
     time_entry_id: Int
   }

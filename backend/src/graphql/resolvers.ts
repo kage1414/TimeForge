@@ -607,7 +607,7 @@ export const resolvers = {
 
           if (entry.flat_amount != null) {
             const fmtUtc = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-            const rate = parseFloat(Number(entry.flat_amount).toFixed(2));
+            const amount = parseFloat(Number(entry.flat_amount).toFixed(2));
             const descSuffix = entry.description ? '\n' + entry.description : '';
             const flatDateLabel = entry.start_time && entry.end_time && entry.start_time !== entry.end_time
               ? `${fmtUtc(entry.start_time)} – ${fmtUtc(entry.end_time)}`
@@ -616,12 +616,12 @@ export const resolvers = {
             await db('invoice_line_items').insert({
               invoice_id: invoice.id,
               description: `${descPrefix}${descSuffix}`,
-              quantity: 1,
-              rate,
-              amount: rate,
+              quantity: null,
+              rate: null,
+              amount,
               time_entry_id: entry.id,
             });
-            subtotal += rate;
+            subtotal += amount;
           } else {
             const rate = Number(entry.rate_override ?? entry.default_rate);
             if (consolidate) {
@@ -701,13 +701,13 @@ export const resolvers = {
             ? `${fmt(entry.start_time)} – ${fmt(entry.end_time)}`
             : entry.start_time ? fmt(entry.start_time) : null;
           const creditDescPrefix = dateLabel ? `Credit: ${entry.project_name} - ${dateLabel}` : `Credit: ${entry.project_name}`;
-          const creditRate = entry.flat_amount != null ? amount : (entry.rate_override ?? entry.default_rate);
-          const creditQty = entry.flat_amount != null ? 1 : parseFloat(((entry.duration_minutes || 0) / 60).toFixed(2));
+          const creditQty = isFlat ? null : parseFloat(((entry.duration_minutes || 0) / 60).toFixed(2));
+          const creditRate = isFlat ? null : -Number(entry.rate_override ?? entry.default_rate);
           await db('invoice_line_items').insert({
             invoice_id: invoice.id,
             description: `${creditDescPrefix}${entry.description ? '\n' + entry.description : ''}`,
             quantity: creditQty,
-            rate: -Number(creditRate),
+            rate: creditRate,
             amount: parseFloat((-amount).toFixed(2)),
             time_entry_id: entry.id,
           });

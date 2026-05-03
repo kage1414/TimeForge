@@ -232,8 +232,8 @@ export default function InvoiceDetailPage() {
           const date = dashIdx >= 0 ? first.slice(dashIdx) : "";
           return `<strong>${name}</strong>${date}${rest.length ? "<br><em>" + rest.join("<br>") + "</em>" : ""}`;
         })()}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${Number(li.quantity).toFixed(2)}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${isCredit ? `-$${Math.abs(Number(li.rate)).toFixed(2)}` : `$${Number(li.rate).toFixed(2)}`}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${li.quantity == null ? "" : Number(li.quantity).toFixed(2)}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${li.rate == null ? "" : isCredit ? `-$${Math.abs(Number(li.rate)).toFixed(2)}` : `$${Number(li.rate).toFixed(2)}`}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${isCredit ? `-$${Math.abs(Number(li.amount)).toFixed(2)}` : `$${Number(li.amount).toFixed(2)}`}</td>
       </tr>`;
       })
@@ -402,8 +402,8 @@ export default function InvoiceDetailPage() {
     (invoice.line_items || []).forEach((li) => {
       rows.push([
         `"${li.description.replace(/"/g, '""')}"`,
-        Number(li.quantity).toFixed(2),
-        Number(li.rate).toFixed(2),
+        li.quantity == null ? "" : Number(li.quantity).toFixed(2),
+        li.rate == null ? "" : Number(li.rate).toFixed(2),
         Number(li.amount).toFixed(2),
       ]);
     });
@@ -616,10 +616,12 @@ export default function InvoiceDetailPage() {
                     })()}
                   </td>
                   <td className="py-2 text-right">
-                    {Number(li.quantity).toFixed(2)}
+                    {li.quantity == null ? "" : Number(li.quantity).toFixed(2)}
                   </td>
                   <td className="py-2 text-right">
-                    {isCredit
+                    {li.rate == null
+                      ? ""
+                      : isCredit
                       ? `-$${Math.abs(Number(li.rate)).toFixed(2)}`
                       : `$${Number(li.rate).toFixed(2)}`}
                   </td>
