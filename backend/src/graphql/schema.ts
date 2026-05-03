@@ -224,6 +224,63 @@ export const typeDefs = `#graphql
     userSettings: UserSettings!
     dashboard: Dashboard!
     invites: [Invite!]!
+    backupDestinations: [BackupDestination!]!
+    backupConfigured: Boolean!
+  }
+
+  type BackupDestination {
+    id: Int!
+    name: String!
+    provider: String!
+    s3_endpoint: String
+    s3_region: String
+    s3_bucket: String
+    s3_access_key_id: String
+    s3_prefix: String
+    s3_force_path_style: Boolean
+    nextcloud_base_url: String
+    nextcloud_username: String
+    nextcloud_path: String
+    last_run_at: String
+    last_run_status: String
+    last_run_error: String
+    created_at: String!
+    updated_at: String!
+  }
+
+  type BackupRunResult {
+    filename: String!
+    bytes: Int!
+  }
+
+  input S3DestinationInput {
+    endpoint: String
+    region: String!
+    bucket: String!
+    access_key_id: String!
+    secret_access_key: String!
+    prefix: String
+    force_path_style: Boolean
+  }
+
+  input NextcloudDestinationInput {
+    base_url: String!
+    username: String!
+    password: String!
+    path: String
+  }
+
+  input CreateBackupDestinationInput {
+    name: String!
+    provider: String!
+    s3: S3DestinationInput
+    nextcloud: NextcloudDestinationInput
+  }
+
+  input UpdateBackupDestinationInput {
+    name: String
+    s3: S3DestinationInput
+    nextcloud: NextcloudDestinationInput
   }
 
   input CreateClientInput {
@@ -346,5 +403,10 @@ export const typeDefs = `#graphql
     sendInvoice(id: Int!, to: String!, body: String, pdfBase64: String): Boolean!
     importTimeEntries(entries: [ImportTimeEntryInput!]!): Int!
     testSmtp(host: String!, port: Int!, user: String!, pass: String!, secure: Boolean!): Boolean!
+    createBackupDestination(input: CreateBackupDestinationInput!): BackupDestination!
+    updateBackupDestination(id: Int!, input: UpdateBackupDestinationInput!): BackupDestination!
+    deleteBackupDestination(id: Int!): Boolean!
+    testBackupDestination(id: Int!): Boolean!
+    runBackupDestination(id: Int!): BackupRunResult!
   }
 `;

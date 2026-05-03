@@ -5,6 +5,58 @@ import nodemailer from 'nodemailer';
 import { GraphQLError } from 'graphql';
 import db from '../db';
 import { JWT_SECRET, Context } from '../index';
+import { isBackupEncryptionConfigured } from '../backup/encryption';
+import {
+  BackupDestinationRow,
+  BackupProvider,
+  encryptProviderConfig,
+  ensureBackupReady,
+  runBackup,
+  testDestination,
+} from '../backup/run';
+
+function toBackupDestinationGql(row: BackupDestinationRow) {
+  const base = {
+    id: row.id,
+    name: row.name,
+    provider: row.provider,
+    last_run_at: row.last_run_at ? new Date(row.last_run_at as any).toISOString() : null,
+    last_run_status: row.last_run_status,
+    last_run_error: row.last_run_error,
+    created_at: new Date(row.created_at as any).toISOString(),
+    updated_at: new Date(row.updated_at as any).toISOString(),
+    s3_endpoint: null as string | null,
+    s3_region: null as string | null,
+    s3_bucket: null as string | null,
+    s3_access_key_id: null as string | null,
+    s3_prefix: null as string | null,
+    s3_force_path_style: null as boolean | null,
+    nextcloud_base_url: null as string | null,
+    nextcloud_username: null as string | null,
+    nextcloud_path: null as string | null,
+  };
+  // Surface non-secret fields for editing UX. We never decrypt secrets to the client.
+  try {
+    if (!isBackupEncryptionConfigured()) return base;
+    const { decryptProviderConfig } = require('../backup/run') as typeof import('../backup/run');
+    const decoded = decryptProviderConfig(row);
+    if (decoded.provider === 's3') {
+      base.s3_endpoint = decoded.config.endpoint || null;
+      base.s3_region = decoded.config.region;
+      base.s3_bucket = decoded.config.bucket;
+      base.s3_access_key_id = decoded.config.access_key_id;
+      base.s3_prefix = decoded.config.prefix || null;
+      base.s3_force_path_style = decoded.config.force_path_style ?? null;
+    } else if (decoded.provider === 'nextcloud') {
+      base.nextcloud_base_url = decoded.config.base_url;
+      base.nextcloud_username = decoded.config.username;
+      base.nextcloud_path = decoded.config.path || null;
+    }
+  } catch {
+    // If decryption fails (e.g. key rotated), still return identifying fields.
+  }
+  return base;
+}
 
 function toISO(val: any): string | null {
   if (!val) return null;
@@ -235,6 +287,14 @@ export const resolvers = {
         .leftJoin('users', 'invites.created_by', 'users.id')
         .select('invites.*', 'users.name as creator_name')
         .orderBy('invites.created_at', 'desc');
+    },
+
+    backupConfigured: () => isBackupEncryptionConfigured(),
+
+    backupDestinations: async (_: any, __: any, context: Context) => {
+      const user = requireAuth(context);
+      const rows = await db('backup_destinations').where('user_id', user.id).orderBy('id');
+      return rows.map(toBackupDestinationGql);
     },
   },
 
@@ -951,6 +1011,81 @@ export const resolvers = {
       });
       await transport.verify();
       return true;
+    },
+
+    createBackupDestination: async (
+      _: any,
+      { input }: { input: { name: string; provider: string; s3?: any; nextcloud?: any } },
+      context: Context
+    ) => {
+      const user = requireAuth(context);
+      ensureBackupReady();
+      const provider = input.provider as BackupProvider;
+      let config_encrypted: string;
+      if (provider === 's3') {
+        if (!input.s3) throw new Error('s3 config required for provider "s3"');
+        config_encrypted = encryptProviderConfig({ provider: 's3', config: input.s3 });
+      } else if (provider === 'nextcloud') {
+        if (!input.nextcloud) throw new Error('nextcloud config required for provider "nextcloud"');
+        config_encrypted = encryptProviderConfig({ provider: 'nextcloud', config: input.nextcloud });
+      } else {
+        throw new Error(`Unsupported provider: ${input.provider}`);
+      }
+      const [row] = await db('backup_destinations')
+        .insert({ user_id: user.id, name: input.name, provider, config_encrypted })
+        .returning('*');
+      return toBackupDestinationGql(row);
+    },
+
+    updateBackupDestination: async (
+      _: any,
+      { id, input }: { id: number; input: { name?: string; s3?: any; nextcloud?: any } },
+      context: Context
+    ) => {
+      const user = requireAuth(context);
+      ensureBackupReady();
+      const existing: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .first();
+      if (!existing) throw new Error('Backup destination not found');
+      const update: any = { updated_at: db.fn.now() };
+      if (typeof input.name === 'string') update.name = input.name;
+      if (existing.provider === 's3' && input.s3) {
+        update.config_encrypted = encryptProviderConfig({ provider: 's3', config: input.s3 });
+      } else if (existing.provider === 'nextcloud' && input.nextcloud) {
+        update.config_encrypted = encryptProviderConfig({ provider: 'nextcloud', config: input.nextcloud });
+      }
+      const [row] = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .update(update)
+        .returning('*');
+      return toBackupDestinationGql(row);
+    },
+
+    deleteBackupDestination: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const count = await db('backup_destinations').where({ id, user_id: user.id }).del();
+      return count > 0;
+    },
+
+    testBackupDestination: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const row: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .first();
+      if (!row) throw new Error('Backup destination not found');
+      await testDestination(row);
+      return true;
+    },
+
+    runBackupDestination: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const row: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .first();
+      if (!row) throw new Error('Backup destination not found');
+      const result = await runBackup(row);
+      return { filename: result.filename, bytes: result.bytes };
     },
   },
 };

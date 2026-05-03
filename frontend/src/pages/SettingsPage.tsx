@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { gql } from '../api/client';
 import { UserSettings, User } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import BackupSettings from '../components/BackupSettings';
 
 const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template show_earnings_on_timer resume_window_minutes consolidate_hours';
 
@@ -367,6 +368,10 @@ export default function SettingsPage() {
           Save Settings
         </button>
       </form>
+
+      <div className="mt-6">
+        <BackupSettings />
+      </div>
 
       <form onSubmit={handleChangePassword} className="mt-6">
         <div className="bg-white rounded-lg shadow p-4">
