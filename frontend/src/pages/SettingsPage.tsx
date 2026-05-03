@@ -5,7 +5,7 @@ import { gql } from '../api/client';
 import { UserSettings, User } from '../types';
 import { useAuth } from '../auth/AuthContext';
 
-const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template show_earnings_on_timer';
+const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template show_earnings_on_timer resume_window_minutes consolidate_hours';
 
 const SETTINGS_QUERY = `query { userSettings { ${SETTINGS_FIELDS} } }`;
 
@@ -44,6 +44,8 @@ export default function SettingsPage() {
   const [smtpFromName, setSmtpFromName] = useState('');
   const [emailTemplate, setEmailTemplate] = useState('');
   const [showEarningsOnTimer, setShowEarningsOnTimer] = useState(false);
+  const [resumeWindowMinutes, setResumeWindowMinutes] = useState('60');
+  const [consolidateHours, setConsolidateHours] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -85,6 +87,8 @@ export default function SettingsPage() {
       setSmtpFromName(settings.smtp_from_name || '');
       setEmailTemplate(settings.default_email_template || '');
       setShowEarningsOnTimer(settings.show_earnings_on_timer ?? false);
+      setResumeWindowMinutes(String(settings.resume_window_minutes ?? 60));
+      setConsolidateHours(settings.consolidate_hours ?? false);
     }
   }, [settings]);
 
@@ -116,6 +120,8 @@ export default function SettingsPage() {
           smtp_from_name: smtpFromName || null,
           default_email_template: emailTemplate || null,
           show_earnings_on_timer: showEarningsOnTimer,
+          resume_window_minutes: resumeWindowMinutes ? Math.max(1, Math.floor(Number(resumeWindowMinutes))) : 60,
+          consolidate_hours: consolidateHours,
         },
       }),
     onSuccess: () => {
@@ -261,6 +267,22 @@ export default function SettingsPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow p-4">
+          <h2 className="font-semibold mb-4">Timer</h2>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Resume Window (minutes)</label>
+            <input
+              className="border rounded p-2 w-full md:w-48"
+              type="number"
+              min="1"
+              step="1"
+              value={resumeWindowMinutes}
+              onChange={(e) => setResumeWindowMinutes(e.target.value)}
+            />
+            <p className="text-xs text-gray-400 mt-1">How long after a time entry ends you can still resume it. Default: 60 minutes.</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4">
           <h2 className="font-semibold mb-4">Invoice Defaults</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -269,6 +291,17 @@ export default function SettingsPage() {
                 onChange={(e) => setDefaultDueDays(e.target.value)} />
               <p className="text-xs text-gray-400 mt-1">Set to 0 for "Upon Receipt"</p>
             </div>
+          </div>
+          <div className="mt-4">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={consolidateHours}
+                onChange={(e) => setConsolidateHours(e.target.checked)}
+              />
+              Consolidate hours
+            </label>
+            <p className="text-xs text-gray-400 mt-1">When creating an invoice, merge time entries on the same day (same project and rate) into a single line item.</p>
           </div>
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Default Email Template</label>

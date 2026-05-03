@@ -21,6 +21,15 @@ export function useAuth() {
   return ctx;
 }
 
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp != null && payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,7 +38,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
-    if (!token) {
+    if (!token || isTokenExpired(token)) {
+      if (token) localStorage.removeItem('auth_token');
       setLoading(false);
       return;
     }
