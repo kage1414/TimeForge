@@ -193,8 +193,8 @@ export default function TimeEntriesPage() {
           input: {
             project_id: Number(addModal.projectId),
             description: addModal.description || null,
-            start_time: addModal.isTimeBased && addModal.startTime ? new Date(addModal.startTime).toISOString() : null,
-            end_time: addModal.isTimeBased && addModal.endTime ? new Date(addModal.endTime).toISOString() : null,
+            start_time: addModal.startTime ? new Date(addModal.startTime).toISOString() : null,
+            end_time: addModal.endTime ? new Date(addModal.endTime).toISOString() : null,
             is_billable: addModal.isBillable,
             rate_override: addModal.isTimeBased && addModal.rateOverride ? Number(addModal.rateOverride) : null,
             flat_amount: !addModal.isTimeBased && addModal.flatAmount ? Number(addModal.flatAmount) : null,
@@ -293,6 +293,10 @@ export default function TimeEntriesPage() {
 
   function formatTime(iso: string): string {
     return new Date(iso).toLocaleString();
+  }
+
+  function formatDate(iso: string): string {
+    return new Date(iso).toLocaleDateString(undefined, { timeZone: 'UTC' });
   }
 
   function openEditModal(e: TimeEntry) {
@@ -448,8 +452,8 @@ export default function TimeEntriesPage() {
                     <tr key={e.id} className="border-t hover:bg-gray-50">
                       <td className="p-3 font-medium">{e.project_name}</td>
                       <td className="p-3 max-w-[160px] truncate" title={e.description || ""}>{e.description || "-"}</td>
-                      <td className="p-3">{e.start_time ? formatTime(e.start_time) : "—"}</td>
-                      <td className="p-3">{e.end_time ? formatTime(e.end_time) : "—"}</td>
+                      <td className="p-3">{e.start_time ? (isFlat ? formatDate(e.start_time) : formatTime(e.start_time)) : "—"}</td>
+                      <td className="p-3">{e.end_time ? (isFlat ? formatDate(e.end_time) : formatTime(e.end_time)) : "—"}</td>
                       <td className="p-3">{isFlat ? "—" : formatDuration(e.duration_minutes)}</td>
                       <td className="p-3">{isFlat ? "—" : `$${Number(rate).toFixed(2)}/hr`}</td>
                       <td className="p-3">${amount.toFixed(2)}</td>
@@ -485,8 +489,8 @@ export default function TimeEntriesPage() {
               const amount = isFlat ? Number(e.flat_amount) : (e.duration_minutes / 60) * Number(rate);
               const tooltip = [
                 e.description ? `Description: ${e.description}` : null,
-                e.start_time ? `Start: ${formatTime(e.start_time)}` : null,
-                e.end_time ? `End: ${formatTime(e.end_time)}` : null,
+                e.start_time ? `Start: ${isFlat ? formatDate(e.start_time) : formatTime(e.start_time)}` : null,
+                e.end_time ? `End: ${isFlat ? formatDate(e.end_time) : formatTime(e.end_time)}` : null,
                 !isFlat ? `Rate: $${Number(rate).toFixed(2)}/hr` : null,
                 !isFlat ? `Duration: ${formatDuration(e.duration_minutes)}` : null,
                 `Client: ${e.client_name}`,
@@ -810,6 +814,11 @@ export default function TimeEntriesPage() {
                   toast.error('End time must be after start time');
                   return;
                 }
+                if (!addModal.isTimeBased && addModal.startTime && addModal.endTime &&
+                    new Date(addModal.endTime) < new Date(addModal.startTime)) {
+                  toast.error('End date must be on or after start date');
+                  return;
+                }
                 addEntry.mutate();
               }}
               className="space-y-4"
@@ -841,11 +850,11 @@ export default function TimeEntriesPage() {
                 <input
                   type="checkbox"
                   checked={addModal.isTimeBased}
-                  onChange={(e) => setAddModal({ ...addModal, isTimeBased: e.target.checked })}
+                  onChange={(e) => setAddModal({ ...addModal, isTimeBased: e.target.checked, startTime: "", endTime: "" })}
                 />
                 Time-based entry
               </label>
-              {addModal.isTimeBased && (
+              {addModal.isTimeBased ? (
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
@@ -866,6 +875,27 @@ export default function TimeEntriesPage() {
                     />
                   </div>
                 </>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <input
+                      className="border rounded p-2 w-full"
+                      type="date"
+                      value={addModal.startTime}
+                      onChange={(e) => setAddModal({ ...addModal, startTime: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <input
+                      className="border rounded p-2 w-full"
+                      type="date"
+                      value={addModal.endTime}
+                      onChange={(e) => setAddModal({ ...addModal, endTime: e.target.value })}
+                    />
+                  </div>
+                </div>
               )}
               {addModal.isTimeBased ? (
                 <div>

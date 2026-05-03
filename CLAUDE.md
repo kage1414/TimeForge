@@ -80,7 +80,7 @@ Full-stack invoicing and time-tracking application.
 
 - **clients**: id, name, email, address1, address2, city, state, phone
 - **projects**: id, client_id, name, description, default_rate, is_active
-- **time_entries**: id, project_id, description, start_time, end_time, duration_minutes, is_billable, invoice_id, rate_override, flat_amount (when non-null, the entry is a flat-amount item with no date/time — start_time/end_time stay NULL and it is excluded from running-timer queries and UI filters)
+- **time_entries**: id, project_id, description, start_time, end_time, duration_minutes, is_billable, invoice_id, rate_override, flat_amount (when non-null, the entry is a flat-amount item; start_time/end_time are an optional date range — stored as ISO at UTC midnight, formatted with `timeZone: 'UTC'` to avoid off-by-one in local time. Flat entries are excluded from running-timer queries and UI filters)
 - **invoices**: id, client_id, invoice_number, status (draft/sent/paid/overdue/cancelled), issue_date, due_date, subtotal, tax_rate, tax_amount, credits_applied, total, notes
 - **invoice_line_items**: id, invoice_id, description, quantity, rate, amount, time_entry_id
 - **credits**: id, client_id, amount, remaining_amount, description, source_invoice_id, applied_invoice_id

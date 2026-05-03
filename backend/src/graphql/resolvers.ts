@@ -596,9 +596,13 @@ export const resolvers = {
             : null;
 
           if (entry.flat_amount != null) {
+            const fmtUtc = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
             const rate = parseFloat(Number(entry.flat_amount).toFixed(2));
             const descSuffix = entry.description ? '\n' + entry.description : '';
-            const descPrefix = entryDate ? `${entry.project_name} - ${entryDate}` : entry.project_name;
+            const flatDateLabel = entry.start_time && entry.end_time && entry.start_time !== entry.end_time
+              ? `${fmtUtc(entry.start_time)} – ${fmtUtc(entry.end_time)}`
+              : entry.start_time ? fmtUtc(entry.start_time) : null;
+            const descPrefix = flatDateLabel ? `${entry.project_name} - ${flatDateLabel}` : entry.project_name;
             await db('invoice_line_items').insert({
               invoice_id: invoice.id,
               description: `${descPrefix}${descSuffix}`,
@@ -681,10 +685,12 @@ export const resolvers = {
             const hours = (entry.duration_minutes || 0) / 60;
             amount = parseFloat((hours * rate).toFixed(2));
           }
-          const entryDate = entry.start_time
-            ? new Date(entry.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : null;
-          const creditDescPrefix = entryDate ? `Credit: ${entry.project_name} - ${entryDate}` : `Credit: ${entry.project_name}`;
+          const isFlat = entry.flat_amount != null;
+          const fmt = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', ...(isFlat ? { timeZone: 'UTC' } : {}) });
+          const dateLabel = isFlat && entry.start_time && entry.end_time && entry.start_time !== entry.end_time
+            ? `${fmt(entry.start_time)} – ${fmt(entry.end_time)}`
+            : entry.start_time ? fmt(entry.start_time) : null;
+          const creditDescPrefix = dateLabel ? `Credit: ${entry.project_name} - ${dateLabel}` : `Credit: ${entry.project_name}`;
           const creditRate = entry.flat_amount != null ? amount : (entry.rate_override ?? entry.default_rate);
           const creditQty = entry.flat_amount != null ? 1 : parseFloat(((entry.duration_minutes || 0) / 60).toFixed(2));
           await db('invoice_line_items').insert({
