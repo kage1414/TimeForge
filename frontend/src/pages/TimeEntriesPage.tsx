@@ -308,8 +308,8 @@ export default function TimeEntriesPage() {
     });
   }
 
-  const running = entries.filter((e) => !e.end_time);
-  const completed = entries.filter((e) => e.end_time);
+  const running = entries.filter((e) => !e.end_time && e.flat_amount == null);
+  const completed = entries.filter((e) => e.end_time || e.flat_amount != null);
   const hasRunning = running.length > 0;
 
   return (
@@ -845,25 +845,27 @@ export default function TimeEntriesPage() {
                 />
                 Time-based entry
               </label>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
-                <input
-                  className="border rounded p-2 w-full"
-                  type="datetime-local"
-                  value={addModal.startTime}
-                  onChange={(e) => setAddModal({ ...addModal, startTime: e.target.value })}
-                />
-              </div>
               {addModal.isTimeBased && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
-                  <input
-                    className="border rounded p-2 w-full"
-                    type="datetime-local"
-                    value={addModal.endTime}
-                    onChange={(e) => setAddModal({ ...addModal, endTime: e.target.value })}
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                    <input
+                      className="border rounded p-2 w-full"
+                      type="datetime-local"
+                      value={addModal.startTime}
+                      onChange={(e) => setAddModal({ ...addModal, startTime: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                    <input
+                      className="border rounded p-2 w-full"
+                      type="datetime-local"
+                      value={addModal.endTime}
+                      onChange={(e) => setAddModal({ ...addModal, endTime: e.target.value })}
+                    />
+                  </div>
+                </>
               )}
               {addModal.isTimeBased ? (
                 <div>

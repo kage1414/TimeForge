@@ -187,6 +187,7 @@ export const resolvers = {
       const runningTimers = await db('time_entries')
         .where('time_entries.user_id', user.id)
         .whereNull('end_time')
+        .whereNull('flat_amount')
         .join('projects', 'time_entries.project_id', 'projects.id')
         .join('clients', 'projects.client_id', 'clients.id')
         .select('time_entries.*', 'projects.name as project_name', db.raw("COALESCE(clients.name, clients.company) as client_name"));
@@ -356,6 +357,7 @@ export const resolvers = {
 
     createTimeEntry: async (_: any, { input }: any, context: Context) => {
       const user = requireAuth(context);
+      const isFlat = input.flat_amount != null;
       let duration = input.duration_minutes;
       if (!duration && input.start_time && input.end_time) {
         duration = Math.round((new Date(input.end_time).getTime() - new Date(input.start_time).getTime()) / 60000);
@@ -364,7 +366,7 @@ export const resolvers = {
         .insert({
           ...input,
           user_id: user.id,
-          start_time: input.start_time || new Date().toISOString(),
+          start_time: input.start_time || (isFlat ? null : new Date().toISOString()),
           duration_minutes: duration,
           is_billable: input.is_billable ?? true,
         })
@@ -421,7 +423,7 @@ export const resolvers = {
       if (minutesSinceEnd > windowMinutes) {
         throw new Error(`Resume window expired (${windowMinutes} minute limit)`);
       }
-      const runningTimer = await db('time_entries').where('user_id', user.id).whereNull('end_time').first();
+      const runningTimer = await db('time_entries').where('user_id', user.id).whereNull('end_time').whereNull('flat_amount').first();
       if (runningTimer) throw new Error('Another timer is already running. Stop it first.');
       const [updated] = await db('time_entries')
         .where({ id, user_id: user.id })
