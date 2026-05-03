@@ -853,7 +853,7 @@ export const resolvers = {
         <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;color:#111827">
           ${bodyHtml}
           <h1 style="color:#4f46e5;font-size:24px">Invoice #${invoice.invoice_number}</h1>
-          <p style="color:#6b7280">To: <strong>${invoice.client_name}</strong>${invoice.client_company ? ` (${invoice.client_company})` : ''}</p>
+          <p style="color:#6b7280">To: <strong>${invoice.client_name}</strong>${invoice.client_company && invoice.client_company !== invoice.client_name ? ` (${invoice.client_company})` : ''}</p>
           <p style="color:#6b7280">Issue Date: ${issueDate} &nbsp;|&nbsp; Due: ${dueDate}</p>
           <table style="width:100%;border-collapse:collapse;margin:16px 0">
             <thead>

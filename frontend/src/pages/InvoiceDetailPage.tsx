@@ -289,7 +289,7 @@ export default function InvoiceDetailPage() {
         <div>
           <p style="margin:0 0 4px;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:1px">Bill To</p>
           ${invoice.client_company ? `<p style="margin:2px 0;font-weight:700">${invoice.client_company}</p>` : ""}
-          <p style="margin:2px 0;font-weight:${invoice.client_company ? "500" : "600"}">${invoice.client_name}</p>
+          ${invoice.client_name && invoice.client_name !== invoice.client_company ? `<p style="margin:2px 0;font-weight:${invoice.client_company ? "500" : "600"}">${invoice.client_name}</p>` : ""}
           ${invoice.client_address1 ? `<p style="margin:2px 0">${invoice.client_address1}</p>` : ""}
           ${invoice.client_address2 ? `<p style="margin:2px 0">${invoice.client_address2}</p>` : ""}
           ${invoice.client_city || invoice.client_state || invoice.client_zip ? `<p style="margin:2px 0">${[invoice.client_city, invoice.client_state].filter(Boolean).join(", ")}${invoice.client_zip ? ` ${invoice.client_zip}` : ""}</p>` : ""}
@@ -549,9 +549,11 @@ export default function InvoiceDetailPage() {
           {invoice.client_company && (
             <p className="font-medium">{invoice.client_company}</p>
           )}
-          <p className={invoice.client_company ? "text-sm" : "font-medium"}>
-            {invoice.client_name}
-          </p>
+          {invoice.client_name && invoice.client_name !== invoice.client_company && (
+            <p className={invoice.client_company ? "text-sm" : "font-medium"}>
+              {invoice.client_name}
+            </p>
+          )}
           {invoice.client_email && (
             <p className="text-sm text-gray-500">{invoice.client_email}</p>
           )}

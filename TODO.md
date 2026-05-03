@@ -10,6 +10,7 @@
 - [x] Optional date range on non-time-based entries: Add Entry modal shows two optional date inputs when not time-based; entry list and invoice line items render the range (or single date) when present
 - [x] Fix flat-amount entries with date range billing computed hours × rate instead of the flat amount; backend skips duration calc for flat entries, dashboard sums flat_amount separately, CreateInvoicePage renders flat entries as flat amount; migration zeros duration_minutes on pre-existing flat rows
 - [x] Hide hours and rate on invoice line items for flat-amount entries; line item quantity/rate now nullable, resolver inserts null for flat rows (bill + credit), invoice HTML/PDF/CSV/on-screen render empty cells; migration backfills nullables on pre-existing flat line items
+- [x] Avoid duplicate company name on invoices when a client has only a company (no individual name); skip rendering client_name when it equals client_company in invoice HTML, on-screen, and email "To" line
 - [x] Add "Consolidate hours" user setting; when enabled, invoice creation merges same-day time entries (per project + rate) into a single line item; unbill on consolidated invoices regenerates consolidated line items
 - [x] Rename "Restart" to "Resume" on time entries; add configurable resume window (default 60 min, 1-min increments); block resume on billed entries and outside window
 - [x] Setup to be sent to dockerhub (GitHub Actions workflow + docker-compose.hub.yml)
