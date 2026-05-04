@@ -8,6 +8,7 @@
 
 ## ✅ Done
 
+- [x] Pass `backend/.env` into dev/prod containers via compose `env_file: [{ path, required: false }]`; without this, `BACKUP_ENCRYPTION_KEY` and other vars in the file never reach the container's `process.env`
 - [x] Backend reads `.env` files via `dotenv/config` at both server entry (`src/index.ts`) and the knex CLI (`src/db/knexfile.ts`); `backend/.env.example` documents PORT, JWT_SECRET, ADMIN_EMAIL/PASSWORD, DATABASE_PATH, BACKUP_ENCRYPTION_KEY
 - [x] Fix non-time-based "Add Entry" appearing as a running timer; flat-amount entries now have null start_time/end_time and are excluded from running timer lists/checks
 - [x] Optional date range on non-time-based entries: Add Entry modal shows two optional date inputs when not time-based; entry list and invoice line items render the range (or single date) when present
