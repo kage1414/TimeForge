@@ -1,5 +1,9 @@
 import { Knex } from 'knex';
 
+// SQLite implements `.alter()` by recreating the table, which requires
+// toggling `PRAGMA foreign_keys` — disallowed inside a transaction.
+export const config = { transaction: false };
+
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.alterTable('invoice_line_items', (t) => {
     t.decimal('quantity', 10, 2).nullable().alter();
