@@ -4,8 +4,11 @@
 
 ## 🧠 Backlog
 
+- [] Allow customer email bodies on a per-client basis
+
 ## ✅ Done
 
+- [x] Backend reads `.env` files via `dotenv/config` at both server entry (`src/index.ts`) and the knex CLI (`src/db/knexfile.ts`); `backend/.env.example` documents PORT, JWT_SECRET, ADMIN_EMAIL/PASSWORD, DATABASE_PATH, BACKUP_ENCRYPTION_KEY
 - [x] Fix non-time-based "Add Entry" appearing as a running timer; flat-amount entries now have null start_time/end_time and are excluded from running timer lists/checks
 - [x] Optional date range on non-time-based entries: Add Entry modal shows two optional date inputs when not time-based; entry list and invoice line items render the range (or single date) when present
 - [x] Fix flat-amount entries with date range billing computed hours × rate instead of the flat amount; backend skips duration calc for flat entries, dashboard sums flat_amount separately, CreateInvoicePage renders flat entries as flat amount; migration zeros duration_minutes on pre-existing flat rows
