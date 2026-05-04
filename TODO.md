@@ -6,6 +6,7 @@
 
 ## ✅ Done
 
+- [x] Disable transaction for the nullable-line-item migration on SQLite (it uses .alter() which requires PRAGMA foreign_keys toggling outside any transaction); unblocks subsequent migrations including backup_destinations
 - [x] Fix non-time-based "Add Entry" appearing as a running timer; flat-amount entries now have null start_time/end_time and are excluded from running timer lists/checks
 - [x] Optional date range on non-time-based entries: Add Entry modal shows two optional date inputs when not time-based; entry list and invoice line items render the range (or single date) when present
 - [x] Fix flat-amount entries with date range billing computed hours × rate instead of the flat amount; backend skips duration calc for flat entries, dashboard sums flat_amount separately, CreateInvoicePage renders flat entries as flat amount; migration zeros duration_minutes on pre-existing flat rows
