@@ -424,6 +424,9 @@ export default function BackupSettings() {
                   value={form.ncUrl}
                   onChange={(e) => setForm({ ...form, ncUrl: e.target.value })}
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Nextcloud root, or the full WebDAV URL from Files → Settings → "WebDAV" — both work.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Username *</label>

@@ -14,12 +14,21 @@ function joinUrl(base: string, ...segments: string[]): string {
   return [trimmedBase, ...cleaned].join('/');
 }
 
+// Strip a trailing /remote.php/... segment so users can paste either the
+// Nextcloud root (https://host) or the full WebDAV URL Nextcloud's UI gives them
+// (https://host/remote.php/dav/files/<userid>).
+function normalizeBaseUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  const idx = trimmed.indexOf('/remote.php');
+  return idx === -1 ? trimmed : trimmed.slice(0, idx);
+}
+
 function authHeader(config: NextcloudConfig): string {
   return 'Basic ' + Buffer.from(`${config.username}:${config.password}`).toString('base64');
 }
 
 function webdavRoot(config: NextcloudConfig): string {
-  return joinUrl(config.base_url, 'remote.php/dav/files', config.username);
+  return joinUrl(normalizeBaseUrl(config.base_url), 'remote.php/dav/files', config.username);
 }
 
 async function ensureRemoteFolder(config: NextcloudConfig): Promise<void> {

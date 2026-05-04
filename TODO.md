@@ -8,6 +8,7 @@
 
 ## ✅ Done
 
+- [x] Accept full Nextcloud WebDAV URL (e.g. `https://host/remote.php/dav/files/<userid>`) in the Server URL field — backend strips a trailing `/remote.php/...` segment so users can paste either the root or the URL Nextcloud copies to clipboard; frontend hint added
 - [x] Pass `backend/.env` into dev/prod containers via compose `env_file: [{ path, required: false }]`; without this, `BACKUP_ENCRYPTION_KEY` and other vars in the file never reach the container's `process.env`
 - [x] Backend reads `.env` files via `dotenv/config` at both server entry (`src/index.ts`) and the knex CLI (`src/db/knexfile.ts`); `backend/.env.example` documents PORT, JWT_SECRET, ADMIN_EMAIL/PASSWORD, DATABASE_PATH, BACKUP_ENCRYPTION_KEY
 - [x] Fix non-time-based "Add Entry" appearing as a running timer; flat-amount entries now have null start_time/end_time and are excluded from running timer lists/checks
