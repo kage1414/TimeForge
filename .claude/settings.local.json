@@ -48,7 +48,11 @@
       "Bash(docker-compose -f docker-compose.dev.yml logs --tail=80 backend)",
       "Bash(docker-compose -f docker-compose.dev.yml build backend)",
       "Bash(docker-compose -f docker-compose.dev.yml up -d backend)",
-      "Bash(docker-compose -f docker-compose.dev.yml exec -T backend sh -c 'ls -l /usr/bin/chromium-browser; /usr/bin/chromium-browser --version')"
+      "Bash(docker-compose -f docker-compose.dev.yml exec -T backend sh -c 'ls -l /usr/bin/chromium-browser; /usr/bin/chromium-browser --version')",
+      "Bash(grep -rln *)",
+      "Bash(grep -n *)",
+      "Bash(git -C /Users/kylejohnson/code/TimeForge add backend/src/graphql/resolvers.ts backend/src/index.ts)",
+      "Bash(git -C /Users/kylejohnson/code/TimeForge status)"
     ]
   }
 }
