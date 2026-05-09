@@ -40,7 +40,15 @@
       "Bash(git remote:*)",
       "Bash(grep -l \"<table\\\\|grid-cols-\" /Users/kylejohnson/code/TimeForge/frontend/src/pages/*.tsx)",
       "Bash(wc -l /Users/kylejohnson/code/TimeForge/frontend/src/pages/*.tsx)",
-      "Bash(yarn tsc *)"
+      "Bash(yarn tsc *)",
+      "Bash(git ls-tree *)",
+      "Bash(sqlite3 /Users/kylejohnson/code/TimeForge/data/db.sqlite \"SELECT name FROM knex_migrations ORDER BY id;\")",
+      "Bash(sqlite3 /Users/kylejohnson/code/TimeForge/data/db.sqlite \"DELETE FROM knex_migrations WHERE name = '20260503000003_backup_destinations.ts'; SELECT changes\\(\\);\")",
+      "Bash(docker-compose -f docker-compose.dev.yml logs --tail=40 backend)",
+      "Bash(docker-compose -f docker-compose.dev.yml logs --tail=80 backend)",
+      "Bash(docker-compose -f docker-compose.dev.yml build backend)",
+      "Bash(docker-compose -f docker-compose.dev.yml up -d backend)",
+      "Bash(docker-compose -f docker-compose.dev.yml exec -T backend sh -c 'ls -l /usr/bin/chromium-browser; /usr/bin/chromium-browser --version')"
     ]
   }
 }

@@ -6,6 +6,7 @@
 
 ## ✅ Done
 
+- [x] Background-generate invoice PDF + CSV on `createInvoice`/`unbillTimeEntry`, store at `${EXPORT_DIR}/<user_id>/<client_id>/invoice-<id>.{pdf,csv}` (default `/data/exports`, separate `exportsdata` docker volume). New `invoices.export_status` ('pending'|'generating'|'ready'|'failed') tracked via migration `20260509000001_add_invoice_export_status`. Express routes `/api/invoices/:id/export.{pdf,csv}` (Bearer/`?token=`) stream the cached files; `sendInvoice` now reads the on-disk PDF instead of accepting `pdfBase64`. Frontend polls `export_status` and disables Export PDF / Export CSV / Send Email until ready, with a Retry button on failure. Removed in-browser `html2canvas`/`jspdf` rendering. Dockerfiles install alpine `chromium` for puppeteer.
 - [x] Disable transaction for the nullable-line-item migration on SQLite (it uses .alter() which requires PRAGMA foreign_keys toggling outside any transaction); unblocks subsequent migrations including backup_destinations
 - [x] Fix non-time-based "Add Entry" appearing as a running timer; flat-amount entries now have null start_time/end_time and are excluded from running timer lists/checks
 - [x] Optional date range on non-time-based entries: Add Entry modal shows two optional date inputs when not time-based; entry list and invoice line items render the range (or single date) when present

@@ -91,6 +91,9 @@ export const typeDefs = `#graphql
     notes: String
     payment_method: String
     consolidate_hours: Boolean!
+    export_status: String!
+    export_error: String
+    export_generated_at: String
     line_items: [LineItem!]
     credits: [Credit!]
     created_at: String!
@@ -343,7 +346,8 @@ export const typeDefs = `#graphql
     createCredit(input: CreateCreditInput!): Credit!
     deleteCredit(id: Int!): Boolean!
     updateUserSettings(input: UpdateUserSettingsInput!): UserSettings!
-    sendInvoice(id: Int!, to: String!, body: String, pdfBase64: String): Boolean!
+    sendInvoice(id: Int!, to: String!, body: String, attachPdf: Boolean): Boolean!
+    regenerateInvoiceExports(id: Int!): Invoice!
     importTimeEntries(entries: [ImportTimeEntryInput!]!): Int!
     testSmtp(host: String!, port: Int!, user: String!, pass: String!, secure: Boolean!): Boolean!
   }

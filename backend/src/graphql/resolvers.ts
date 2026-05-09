@@ -1,10 +1,17 @@
 import crypto from 'crypto';
+import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import { GraphQLError } from 'graphql';
 import db from '../db';
 import { JWT_SECRET, Context } from '../index';
+import {
+  deleteInvoiceExports,
+  ensureExportsReady,
+  generateExportsAsync,
+} from '../exports/generator';
+import { invoicePdfPath } from '../exports/paths';
 
 function toISO(val: any): string | null {
   if (!val) return null;
@@ -36,6 +43,7 @@ export const resolvers = {
     due_date: (e: any) => toISO(e.due_date),
     created_at: (e: any) => toISO(e.created_at),
     updated_at: (e: any) => toISO(e.updated_at),
+    export_generated_at: (e: any) => toISO(e.export_generated_at),
   },
   Client: {
     created_at: (e: any) => toISO(e.created_at),
@@ -151,6 +159,10 @@ export const resolvers = {
         .join('clients', 'credits.client_id', 'clients.id')
         .select('credits.*', db.raw('COALESCE(clients.name, clients.company) as client_name'))
         .where('applied_invoice_id', id);
+      // Backfill: kick off generation for any older invoice that hasn't been exported.
+      if (invoice.export_status === 'pending') {
+        generateExportsAsync(invoice.id);
+      }
       return { ...invoice, line_items, credits };
     },
 
@@ -518,7 +530,11 @@ export const resolvers = {
           tax_amount: parseFloat(tax_amount.toFixed(2)),
           total: parseFloat(total.toFixed(2)),
           updated_at: db.fn.now(),
+          export_status: 'pending',
+          export_error: null,
+          export_generated_at: null,
         });
+        generateExportsAsync(invoice.id);
       }
       return updated;
     },
@@ -725,8 +741,12 @@ export const resolvers = {
           tax_amount: parseFloat(tax_amount.toFixed(2)),
           credits_applied: 0,
           total: parseFloat(Math.max(0, total).toFixed(2)),
+          export_status: 'pending',
+          export_error: null,
+          export_generated_at: null,
         })
         .returning('*');
+      generateExportsAsync(invoice.id);
       return updated;
     },
 
@@ -756,6 +776,7 @@ export const resolvers = {
       }
       await db('invoice_line_items').where('invoice_id', id).del();
       await db('invoices').where({ id, user_id: user.id }).del();
+      await deleteInvoiceExports(invoice.user_id, invoice.client_id, id);
       return true;
     },
 
@@ -790,7 +811,7 @@ export const resolvers = {
       }
     },
 
-    sendInvoice: async (_: any, { id, to, body, pdfBase64 }: { id: number; to: string; body?: string; pdfBase64?: string }, context: Context) => {
+    sendInvoice: async (_: any, { id, to, body, attachPdf }: { id: number; to: string; body?: string; attachPdf?: boolean }, context: Context) => {
       const user = requireAuth(context);
       const settings = await db('user_settings').where('user_id', user.id).first();
       if (!settings?.smtp_host || !settings?.smtp_user || !settings?.smtp_pass) {
@@ -804,6 +825,12 @@ export const resolvers = {
         .where('invoices.user_id', user.id)
         .first();
       if (!invoice) throw new GraphQLError('Invoice not found');
+
+      if (attachPdf) {
+        if (invoice.export_status !== 'ready') {
+          throw new GraphQLError('Invoice export is still being generated. Try again in a moment.');
+        }
+      }
 
       const lineItems = await db('invoice_line_items').where('invoice_id', id).orderBy('id');
       const credits = await db('credits').where('applied_invoice_id', id);
@@ -890,12 +917,18 @@ export const resolvers = {
         html,
       };
 
-      if (pdfBase64) {
-        mailOptions.attachments = [{
-          filename: `Invoice-${invoice.invoice_number}.pdf`,
-          content: Buffer.from(pdfBase64, 'base64'),
-          contentType: 'application/pdf',
-        }];
+      if (attachPdf) {
+        const pdfFile = invoicePdfPath(invoice.user_id, invoice.client_id, invoice.id);
+        try {
+          const buf = await fs.promises.readFile(pdfFile);
+          mailOptions.attachments = [{
+            filename: `Invoice-${invoice.invoice_number}.pdf`,
+            content: buf,
+            contentType: 'application/pdf',
+          }];
+        } catch {
+          throw new GraphQLError('Invoice PDF is not available. Try regenerating the export.');
+        }
       }
 
       await transport.sendMail(mailOptions);
@@ -939,6 +972,19 @@ export const resolvers = {
         imported++;
       }
       return imported;
+    },
+
+    regenerateInvoiceExports: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const invoice = await db('invoices').where({ id, user_id: user.id }).first();
+      if (!invoice) throw new GraphQLError('Invoice not found');
+      await db('invoices').where('id', id).update({
+        export_status: 'pending',
+        export_error: null,
+        export_generated_at: null,
+      });
+      generateExportsAsync(id);
+      return { ...invoice, export_status: 'pending', export_error: null, export_generated_at: null };
     },
 
     testSmtp: async (_: any, { host, port, user: smtpUser, pass, secure }: { host: string; port: number; user: string; pass: string; secure: boolean }, context: Context) => {

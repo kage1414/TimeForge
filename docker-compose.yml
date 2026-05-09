@@ -5,11 +5,13 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_PATH: /data/db.sqlite
+      EXPORT_DIR: /data/exports
       PORT: "4000"
     ports:
       - "4000:4000"
     volumes:
       - dbdata:/data
+      - exportsdata:/data/exports
 
   frontend:
     build:
@@ -22,3 +24,4 @@ services:
 
 volumes:
   dbdata:
+  exportsdata:

@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile.dev
     environment:
       DATABASE_PATH: /data/db.sqlite
+      EXPORT_DIR: /data/exports
       PORT: "4000"
       CHOKIDAR_USEPOLLING: "true"
     ports:
