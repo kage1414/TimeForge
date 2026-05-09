@@ -4,7 +4,15 @@
 
 ## 🧠 Backlog
 
-- [] Allow customer email bodies on a per-client basis
+- [] Allow customer email bodies on a per-client basis. This should be configurable on the clients page
+- [] When sending invoice email, include option to cc the user
+- [] Split up settings pages
+- [] Is postgres doing anything? If not, remove it.
+- [] Convert to an ORM that doesn't require migrations
+- [] Configure optional s3 storage for invoice pdfs and csv's. If not set, invoices should be stored on disk
+- [] Allow backups on a schedule, daily, every 3 days, every week, every month, every year, and a custom cron field. This should be a background task
+- [] Optionally allow deletion of backups after specific amount of time
+  - [] The default check to delete backups should be once per day, with the option of letting the user set their own cron schedule. This should be a background task
 
 ## ✅ Done
 
