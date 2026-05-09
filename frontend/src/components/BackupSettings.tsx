@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { gql } from '../api/client';
+import ConfirmModal from './ConfirmModal';
 
 interface BackupDestination {
   id: number;
@@ -69,10 +70,50 @@ const emptyForm: FormState = {
   ncPath: '',
 };
 
+interface RestoreCounts {
+  clients: number;
+  projects: number;
+  invoices: number;
+  invoice_line_items: number;
+  time_entries: number;
+  credits: number;
+  user_settings: number;
+  exported_at: string | null;
+}
+
+interface BackupFile {
+  filename: string;
+  size: number;
+  last_modified: string;
+  exported_at: string | null;
+}
+
+function formatBackupDate(file: BackupFile): string {
+  const iso = file.exported_at || file.last_modified;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return file.filename;
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export default function BackupSettings() {
   const qc = useQueryClient();
   const [form, setForm] = useState<FormState>(emptyForm);
   const [showForm, setShowForm] = useState(false);
+  const [restoreDestId, setRestoreDestId] = useState<number | ''>('');
+  const [restoreFilename, setRestoreFilename] = useState<string>('');
+  const [confirmRestore, setConfirmRestore] = useState(false);
 
   const { data } = useQuery<{ backupConfigured: boolean; backupDestinations: BackupDestination[] }>({
     queryKey: ['backupDestinations'],
@@ -82,6 +123,23 @@ export default function BackupSettings() {
 
   const configured = data?.backupConfigured ?? false;
   const destinations = data?.backupDestinations ?? [];
+
+  const filesQuery = useQuery<{ backupDestinationFiles: BackupFile[] }>({
+    queryKey: ['backupDestinationFiles', restoreDestId],
+    enabled: typeof restoreDestId === 'number',
+    queryFn: () =>
+      gql<{ backupDestinationFiles: BackupFile[] }>(
+        `query($id: Int!) {
+          backupDestinationFiles(id: $id) { filename size last_modified exported_at }
+        }`,
+        { id: restoreDestId },
+      ),
+  });
+
+  // Reset selected backup when destination changes (or when new files load).
+  useEffect(() => {
+    setRestoreFilename('');
+  }, [restoreDestId]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -161,6 +219,29 @@ export default function BackupSettings() {
     onError: (e: Error) => toast.error(`Backup failed: ${e.message}`),
   });
 
+  const restore = useMutation({
+    mutationFn: ({ destinationId, filename }: { destinationId: number; filename: string }) =>
+      gql<{ restoreBackup: RestoreCounts }>(
+        `mutation($destinationId: Int!, $filename: String!) {
+          restoreBackup(destinationId: $destinationId, filename: $filename) {
+            clients projects invoices invoice_line_items time_entries credits user_settings exported_at
+          }
+        }`,
+        { destinationId, filename },
+      ),
+    onSuccess: (res) => {
+      qc.invalidateQueries();
+      const c = res.restoreBackup;
+      const total =
+        c.clients + c.projects + c.invoices + c.invoice_line_items + c.time_entries + c.credits;
+      toast.success(
+        `Restored ${total} rows (${c.clients} clients, ${c.projects} projects, ${c.invoices} invoices, ${c.time_entries} time entries, ${c.credits} credits)`,
+      );
+      setRestoreFilename('');
+    },
+    onError: (e: Error) => toast.error(`Restore failed: ${e.message}`),
+  });
+
   function startEdit(d: BackupDestination) {
     if (d.provider === 's3') {
       setForm({
@@ -201,6 +282,122 @@ export default function BackupSettings() {
     setShowForm(false);
   }
 
+  const files = filesQuery.data?.backupDestinationFiles ?? [];
+  const filesError = filesQuery.error as Error | null;
+  const selectedFile = files.find((f) => f.filename === restoreFilename) || null;
+
+  const restoreSection = (
+    <div className="bg-white rounded-lg shadow p-4">
+      <h2 className="font-semibold mb-2">Restore from Backup</h2>
+      <p className="text-sm text-gray-600 mb-3">
+        Pick a backup from one of your destinations. Restoring will{' '}
+        <strong className="text-red-600">replace all of your data</strong> (clients, projects,
+        invoices, time entries, credits, and settings) with the contents of the chosen backup.
+        Other users on this server are unaffected.
+      </p>
+
+      {destinations.length === 0 ? (
+        <p className="text-sm text-gray-500">
+          Add a backup destination above before you can restore.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
+            <select
+              className="border rounded p-2 w-full"
+              value={restoreDestId}
+              onChange={(e) =>
+                setRestoreDestId(e.target.value === '' ? '' : Number(e.target.value))
+              }
+              disabled={restore.isPending}
+            >
+              <option value="">Select a destination…</option>
+              {destinations.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.provider === 's3' ? 'S3' : 'Nextcloud'})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Backup</label>
+            <select
+              className="border rounded p-2 w-full disabled:bg-gray-50"
+              value={restoreFilename}
+              onChange={(e) => setRestoreFilename(e.target.value)}
+              disabled={
+                typeof restoreDestId !== 'number' ||
+                filesQuery.isLoading ||
+                restore.isPending ||
+                files.length === 0
+              }
+            >
+              <option value="">
+                {typeof restoreDestId !== 'number'
+                  ? 'Select a destination first'
+                  : filesQuery.isLoading
+                  ? 'Loading…'
+                  : files.length === 0
+                  ? 'No backups found'
+                  : 'Select a backup…'}
+              </option>
+              {files.map((f) => (
+                <option key={f.filename} value={f.filename}>
+                  {formatBackupDate(f)} — {formatSize(f.size)}
+                </option>
+              ))}
+            </select>
+            {selectedFile && (
+              <p className="text-xs text-gray-400 mt-1 truncate" title={selectedFile.filename}>
+                {selectedFile.filename}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {filesError && (
+        <p className="text-sm text-red-600 mt-3">List failed: {filesError.message}</p>
+      )}
+
+      {destinations.length > 0 && (
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => setConfirmRestore(true)}
+            disabled={
+              typeof restoreDestId !== 'number' || !restoreFilename || restore.isPending
+            }
+            className="bg-red-600 text-white text-sm px-3 py-1.5 rounded hover:bg-red-700 disabled:opacity-50"
+          >
+            {restore.isPending ? 'Restoring…' : 'Restore selected backup'}
+          </button>
+        </div>
+      )}
+
+      <ConfirmModal
+        open={confirmRestore}
+        title="Restore from backup?"
+        message={
+          selectedFile
+            ? `This will permanently replace all of your existing data with the backup from ${formatBackupDate(
+                selectedFile,
+              )}. This cannot be undone.`
+            : 'This will permanently replace all of your existing data. This cannot be undone.'
+        }
+        confirmLabel="Replace my data"
+        onConfirm={() => {
+          setConfirmRestore(false);
+          if (typeof restoreDestId === 'number' && restoreFilename) {
+            restore.mutate({ destinationId: restoreDestId, filename: restoreFilename });
+          }
+        }}
+        onCancel={() => setConfirmRestore(false)}
+      />
+    </div>
+  );
+
   if (!configured) {
     return (
       <div className="bg-white rounded-lg shadow p-4">
@@ -214,6 +411,7 @@ export default function BackupSettings() {
   }
 
   return (
+    <div className="space-y-6">
     <div className="bg-white rounded-lg shadow p-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold">Backups</h2>
@@ -478,6 +676,8 @@ export default function BackupSettings() {
           </div>
         </form>
       )}
+    </div>
+    {restoreSection}
     </div>
   );
 }

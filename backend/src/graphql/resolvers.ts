@@ -10,8 +10,10 @@ import { isBackupEncryptionConfigured } from '../backup/encryption';
 import {
   BackupDestinationRow,
   BackupProvider,
+  downloadBackupFromDestination,
   encryptProviderConfig,
   ensureBackupReady,
+  listBackupsForDestination,
   runBackup,
   testDestination,
 } from '../backup/run';
@@ -20,6 +22,7 @@ import {
   generateExportsAsync,
 } from '../exports/generator';
 import { invoicePdfPath } from '../exports/paths';
+import { decodeBackup, restoreUserBackup } from '../backup/restore';
 
 function toBackupDestinationGql(row: BackupDestinationRow) {
   const base = {
@@ -69,6 +72,15 @@ function toISO(val: any): string | null {
   if (val instanceof Date) return val.toISOString();
   if (typeof val === 'number') return new Date(val).toISOString();
   return String(val);
+}
+
+function parseExportedAtFromFilename(filename: string): string | null {
+  // Backup filename format: timeforge-backup-{email}-{userId}-{YYYY-MM-DDTHH-MM-SS-mmmZ}.json.gz
+  const m = /-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.json\.gz$/.exec(filename);
+  if (!m) return null;
+  const iso = m[1].replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/, 'T$1:$2:$3.$4Z');
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 function requireAuth(context: Context) {
@@ -301,6 +313,27 @@ export const resolvers = {
     },
 
     backupConfigured: () => isBackupEncryptionConfigured(),
+
+    backupDestinationFiles: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const row: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .first();
+      if (!row) throw new GraphQLError('Backup destination not found');
+      const files = await listBackupsForDestination(row);
+      return files
+        .map((f) => ({
+          filename: f.filename,
+          size: f.size,
+          last_modified: f.last_modified,
+          exported_at: parseExportedAtFromFilename(f.filename),
+        }))
+        .sort((a, b) => {
+          const ta = Date.parse(a.last_modified) || 0;
+          const tb = Date.parse(b.last_modified) || 0;
+          return tb - ta;
+        });
+    },
 
     backupDestinations: async (_: any, __: any, context: Context) => {
       const user = requireAuth(context);
@@ -1131,6 +1164,25 @@ export const resolvers = {
       if (!row) throw new Error('Backup destination not found');
       const result = await runBackup(row);
       return { filename: result.filename, bytes: result.bytes };
+    },
+
+    restoreBackup: async (
+      _: any,
+      { destinationId, filename }: { destinationId: number; filename: string },
+      context: Context,
+    ) => {
+      const user = requireAuth(context);
+      const row: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id: destinationId, user_id: user.id })
+        .first();
+      if (!row) throw new GraphQLError('Backup destination not found');
+      const buffer = await downloadBackupFromDestination(row, filename);
+      if (!buffer.length) throw new GraphQLError('Backup file is empty');
+      const backup = decodeBackup(buffer);
+      const counts = await restoreUserBackup(user.id, backup);
+      const restoredInvoiceIds = await db('invoices').where('user_id', user.id).pluck('id');
+      for (const id of restoredInvoiceIds) generateExportsAsync(id);
+      return { ...counts, exported_at: backup.exported_at || null };
     },
   },
 };

@@ -1,8 +1,21 @@
 import db from '../db';
 import { decryptJson, encryptJson, isBackupEncryptionConfigured } from './encryption';
 import { backupFilename, buildUserBackup, gzipBackup } from './export';
-import { S3Config, testS3, uploadToS3 } from './providers/s3';
-import { NextcloudConfig, testNextcloud, uploadToNextcloud } from './providers/nextcloud';
+import {
+  S3Config,
+  downloadFromS3,
+  listFromS3,
+  s3KeyFor,
+  testS3,
+  uploadToS3,
+} from './providers/s3';
+import {
+  NextcloudConfig,
+  downloadFromNextcloud,
+  listFromNextcloud,
+  testNextcloud,
+  uploadToNextcloud,
+} from './providers/nextcloud';
 
 export type BackupProvider = 's3' | 'nextcloud';
 
@@ -109,4 +122,45 @@ export async function runBackup(row: BackupDestinationRow): Promise<{ filename: 
       });
     throw err;
   }
+}
+
+export interface RemoteBackupFile {
+  filename: string;
+  size: number;
+  last_modified: string;
+}
+
+const BACKUP_FILE_RX = /^timeforge-backup-.+\.json\.gz$/i;
+
+export async function listBackupsForDestination(row: BackupDestinationRow): Promise<RemoteBackupFile[]> {
+  ensureBackupReady();
+  const cfg = decryptProviderConfig(row);
+  if (cfg.provider === 's3') {
+    const objects = await listFromS3(cfg.config);
+    return objects
+      .map((o) => ({
+        filename: o.key.split('/').pop() || o.key,
+        size: o.size,
+        last_modified: o.last_modified,
+      }))
+      .filter((o) => BACKUP_FILE_RX.test(o.filename));
+  }
+  const items = await listFromNextcloud(cfg.config);
+  return items.filter((o) => BACKUP_FILE_RX.test(o.filename));
+}
+
+export async function downloadBackupFromDestination(
+  row: BackupDestinationRow,
+  filename: string,
+): Promise<Buffer> {
+  ensureBackupReady();
+  if (!BACKUP_FILE_RX.test(filename)) {
+    // Defensive: refuse to GET arbitrary paths chosen by the client.
+    throw new Error('Refusing to download non-backup file');
+  }
+  const cfg = decryptProviderConfig(row);
+  if (cfg.provider === 's3') {
+    return downloadFromS3(cfg.config, s3KeyFor(cfg.config, filename));
+  }
+  return downloadFromNextcloud(cfg.config, filename);
 }

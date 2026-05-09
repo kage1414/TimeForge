@@ -96,3 +96,77 @@ export async function testNextcloud(config: NextcloudConfig): Promise<void> {
   }
   await ensureRemoteFolder(config);
 }
+
+export interface NextcloudFile {
+  filename: string;
+  size: number;
+  last_modified: string;
+}
+
+function folderUrl(config: NextcloudConfig): string {
+  const folder = (config.path || '').replace(/^\/+|\/+$/g, '');
+  return folder ? joinUrl(webdavRoot(config), folder) + '/' : webdavRoot(config) + '/';
+}
+
+function parseMultistatus(xml: string): NextcloudFile[] {
+  const out: NextcloudFile[] = [];
+  const responseRx = /<d:response\b[\s\S]*?<\/d:response>/g;
+  let m: RegExpExecArray | null;
+  while ((m = responseRx.exec(xml))) {
+    const block = m[0];
+    const isCollection = /<d:resourcetype>\s*<d:collection\b/.test(block);
+    if (isCollection) continue;
+    const href = /<d:href>([^<]+)<\/d:href>/.exec(block)?.[1];
+    const lastMod = /<d:getlastmodified>([^<]+)<\/d:getlastmodified>/.exec(block)?.[1];
+    const sizeStr = /<d:getcontentlength>([^<]+)<\/d:getcontentlength>/.exec(block)?.[1];
+    if (!href || !lastMod || !sizeStr) continue;
+    const decoded = decodeURIComponent(href).replace(/\/+$/, '');
+    const filename = decoded.split('/').pop() || '';
+    if (!filename) continue;
+    out.push({ filename, size: parseInt(sizeStr, 10), last_modified: lastMod });
+  }
+  return out;
+}
+
+export async function listFromNextcloud(config: NextcloudConfig): Promise<NextcloudFile[]> {
+  const url = folderUrl(config);
+  const res = await fetch(url, {
+    method: 'PROPFIND',
+    headers: {
+      Authorization: authHeader(config),
+      Depth: '1',
+      'Content-Type': 'application/xml',
+    },
+    body: `<?xml version="1.0"?>
+<d:propfind xmlns:d="DAV:">
+  <d:prop>
+    <d:getlastmodified/>
+    <d:getcontentlength/>
+    <d:resourcetype/>
+  </d:prop>
+</d:propfind>`,
+  });
+  if (res.status === 404) return [];
+  if (res.status !== 207) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Nextcloud list failed (${res.status}): ${text.slice(0, 500)}`);
+  }
+  const xml = await res.text();
+  return parseMultistatus(xml);
+}
+
+export async function downloadFromNextcloud(
+  config: NextcloudConfig,
+  filename: string,
+): Promise<Buffer> {
+  const url = buildFileUrl(config, filename);
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Authorization: authHeader(config) },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Nextcloud download failed (${res.status}): ${text.slice(0, 500)}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}

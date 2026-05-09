@@ -229,6 +229,14 @@ export const typeDefs = `#graphql
     invites: [Invite!]!
     backupDestinations: [BackupDestination!]!
     backupConfigured: Boolean!
+    backupDestinationFiles(id: Int!): [BackupFile!]!
+  }
+
+  type BackupFile {
+    filename: String!
+    size: Int!
+    last_modified: String!
+    exported_at: String
   }
 
   type BackupDestination {
@@ -254,6 +262,17 @@ export const typeDefs = `#graphql
   type BackupRunResult {
     filename: String!
     bytes: Int!
+  }
+
+  type RestoreBackupResult {
+    clients: Int!
+    projects: Int!
+    invoices: Int!
+    invoice_line_items: Int!
+    time_entries: Int!
+    credits: Int!
+    user_settings: Int!
+    exported_at: String
   }
 
   input S3DestinationInput {
@@ -412,5 +431,6 @@ export const typeDefs = `#graphql
     deleteBackupDestination(id: Int!): Boolean!
     testBackupDestination(id: Int!): Boolean!
     runBackupDestination(id: Int!): BackupRunResult!
+    restoreBackup(destinationId: Int!, filename: String!): RestoreBackupResult!
   }
 `;
