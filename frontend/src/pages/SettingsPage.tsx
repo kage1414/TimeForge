@@ -4,9 +4,29 @@ import toast from 'react-hot-toast';
 import { gql } from '../api/client';
 import { UserSettings, User } from '../types';
 import { useAuth } from '../auth/AuthContext';
+import { statusTone } from '../lib/statusTone';
 import BackupSettings from '../components/BackupSettings';
+import {
+  TFBadge,
+  TFButton,
+  TFCard,
+  TFCardTitle,
+  TFCheckbox,
+  TFEmpty,
+  TFField,
+  TFInput,
+  TFSelect,
+  TFTable,
+  TFTBody,
+  TFTd,
+  TFTextarea,
+  TFTh,
+  TFTHead,
+  TFTr,
+} from '../components/tf';
 
-const SETTINGS_FIELDS = 'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template show_earnings_on_timer resume_window_minutes consolidate_hours';
+const SETTINGS_FIELDS =
+  'id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template show_earnings_on_timer resume_window_minutes consolidate_hours';
 
 const SETTINGS_QUERY = `query { userSettings { ${SETTINGS_FIELDS} } }`;
 
@@ -121,7 +141,9 @@ export default function SettingsPage() {
           smtp_from_name: smtpFromName || null,
           default_email_template: emailTemplate || null,
           show_earnings_on_timer: showEarningsOnTimer,
-          resume_window_minutes: resumeWindowMinutes ? Math.max(1, Math.floor(Number(resumeWindowMinutes))) : 60,
+          resume_window_minutes: resumeWindowMinutes
+            ? Math.max(1, Math.floor(Number(resumeWindowMinutes)))
+            : 60,
           consolidate_hours: consolidateHours,
         },
       }),
@@ -137,7 +159,13 @@ export default function SettingsPage() {
       await save.mutateAsync();
       return gql(
         `mutation($host: String!, $port: Int!, $user: String!, $pass: String!, $secure: Boolean!) { testSmtp(host: $host, port: $port, user: $user, pass: $pass, secure: $secure) }`,
-        { host: smtpHost, port: Number(smtpPort) || 587, user: smtpUser, pass: smtpPass, secure: smtpSecure }
+        {
+          host: smtpHost,
+          port: Number(smtpPort) || 587,
+          user: smtpUser,
+          pass: smtpPass,
+          secure: smtpSecure,
+        },
       );
     },
     onSuccess: () => toast.success('SMTP connection successful!'),
@@ -146,8 +174,10 @@ export default function SettingsPage() {
 
   const changePassword = useMutation({
     mutationFn: () =>
-      gql('mutation($currentPassword: String!, $newPassword: String!) { changePassword(currentPassword: $currentPassword, newPassword: $newPassword) }',
-        { currentPassword, newPassword }),
+      gql(
+        'mutation($currentPassword: String!, $newPassword: String!) { changePassword(currentPassword: $currentPassword, newPassword: $newPassword) }',
+        { currentPassword, newPassword },
+      ),
     onSuccess: () => {
       setCurrentPassword('');
       setNewPassword('');
@@ -172,8 +202,10 @@ export default function SettingsPage() {
 
   const updateRole = useMutation({
     mutationFn: ({ id, role }: { id: number; role: string }) =>
-      gql('mutation($id: Int!, $role: String!) { updateUserRole(id: $id, role: $role) { id role } }',
-        { id, role }),
+      gql(
+        'mutation($id: Int!, $role: String!) { updateUserRole(id: $id, role: $role) { id role } }',
+        { id, role },
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] });
       toast.success('Role updated');
@@ -185,188 +217,238 @@ export default function SettingsPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
 
-      <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="space-y-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="font-semibold mb-4">Personal Details</h2>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+        className="space-y-6"
+      >
+        <TFCard>
+          <TFCardTitle className="mb-4">Personal Details</TFCardTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-              <input className="border rounded p-2 w-full" value={company} onChange={(e) => setCompany(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
-              <input className="border rounded p-2 w-full" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
-              <input className="border rounded p-2 w-full" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input className="border rounded p-2 w-full" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-              <input className="border rounded p-2 w-full" value={phone} onChange={(e) => setPhone(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label>
-              <input className="border rounded p-2 w-full" value={address1} onChange={(e) => setAddress1(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label>
-              <input className="border rounded p-2 w-full" value={address2} onChange={(e) => setAddress2(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-              <input className="border rounded p-2 w-full" value={city} onChange={(e) => setCity(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-              <input className="border rounded p-2 w-full" value={state} onChange={(e) => setState(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Zip</label>
-              <input className="border rounded p-2 w-full" value={zip} onChange={(e) => setZip(e.target.value)} />
-            </div>
+            <TFField label="Company" className="md:col-span-2">
+              <TFInput value={company} onChange={(e) => setCompany(e.target.value)} />
+            </TFField>
+            <TFField label="First Name">
+              <TFInput value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </TFField>
+            <TFField label="Last Name">
+              <TFInput value={lastName} onChange={(e) => setLastName(e.target.value)} />
+            </TFField>
+            <TFField label="Email">
+              <TFInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </TFField>
+            <TFField label="Phone">
+              <TFInput value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </TFField>
+            <TFField label="Address Line 1">
+              <TFInput value={address1} onChange={(e) => setAddress1(e.target.value)} />
+            </TFField>
+            <TFField label="Address Line 2">
+              <TFInput value={address2} onChange={(e) => setAddress2(e.target.value)} />
+            </TFField>
+            <TFField label="City">
+              <TFInput value={city} onChange={(e) => setCity(e.target.value)} />
+            </TFField>
+            <TFField label="State">
+              <TFInput value={state} onChange={(e) => setState(e.target.value)} />
+            </TFField>
+            <TFField label="Zip">
+              <TFInput value={zip} onChange={(e) => setZip(e.target.value)} />
+            </TFField>
           </div>
-        </div>
+        </TFCard>
 
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="font-semibold mb-4">Online Payment Methods</h2>
+        <TFCard>
+          <TFCardTitle className="mb-4">Online Payment Methods</TFCardTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Venmo</label>
-              <input className="border rounded p-2 w-full" placeholder="@username" value={venmo} onChange={(e) => setVenmo(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cash App</label>
-              <input className="border rounded p-2 w-full" placeholder="$cashtag" value={cashapp} onChange={(e) => setCashapp(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">PayPal</label>
-              <input className="border rounded p-2 w-full" placeholder="email or username" value={paypal} onChange={(e) => setPaypal(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Zelle</label>
-              <input className="border rounded p-2 w-full" placeholder="email or phone" value={zelle} onChange={(e) => setZelle(e.target.value)} />
-            </div>
+            <TFField label="Venmo">
+              <TFInput
+                placeholder="@username"
+                value={venmo}
+                onChange={(e) => setVenmo(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Cash App">
+              <TFInput
+                placeholder="$cashtag"
+                value={cashapp}
+                onChange={(e) => setCashapp(e.target.value)}
+              />
+            </TFField>
+            <TFField label="PayPal">
+              <TFInput
+                placeholder="email or username"
+                value={paypal}
+                onChange={(e) => setPaypal(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Zelle">
+              <TFInput
+                placeholder="email or phone"
+                value={zelle}
+                onChange={(e) => setZelle(e.target.value)}
+              />
+            </TFField>
           </div>
-        </div>
+        </TFCard>
 
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="font-semibold mb-4">Display</h2>
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showEarningsOnTimer}
-              onChange={(e) => setShowEarningsOnTimer(e.target.checked)}
-            />
-            Show dollar amount on running timers
-          </label>
-          <p className="text-xs text-gray-400 mt-1">Display live earnings next to the elapsed time counter based on the project rate.</p>
-        </div>
+        <TFCard>
+          <TFCardTitle className="mb-4">Display</TFCardTitle>
+          <TFCheckbox
+            id="show-earnings"
+            label="Show dollar amount on running timers"
+            description="Display live earnings next to the elapsed time counter based on the project rate."
+            checked={showEarningsOnTimer}
+            onChange={(e) => setShowEarningsOnTimer(e.target.checked)}
+          />
+        </TFCard>
 
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="font-semibold mb-4">Timer</h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Resume Window (minutes)</label>
-            <input
-              className="border rounded p-2 w-full md:w-48"
+        <TFCard>
+          <TFCardTitle className="mb-4">Timer</TFCardTitle>
+          <TFField
+            label="Resume Window (minutes)"
+            hint="How long after a time entry ends you can still resume it. Default: 60 minutes."
+            className="md:max-w-xs"
+          >
+            <TFInput
               type="number"
               min="1"
               step="1"
               value={resumeWindowMinutes}
               onChange={(e) => setResumeWindowMinutes(e.target.value)}
             />
-            <p className="text-xs text-gray-400 mt-1">How long after a time entry ends you can still resume it. Default: 60 minutes.</p>
-          </div>
-        </div>
+          </TFField>
+        </TFCard>
 
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="font-semibold mb-4">Invoice Defaults</h2>
+        <TFCard>
+          <TFCardTitle className="mb-4">Invoice Defaults</TFCardTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Default Due In (days)</label>
-              <input className="border rounded p-2 w-full" type="number" min="0" value={defaultDueDays}
-                onChange={(e) => setDefaultDueDays(e.target.value)} />
-              <p className="text-xs text-gray-400 mt-1">Set to 0 for "Upon Receipt"</p>
-            </div>
-          </div>
-          <div className="mt-4">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={consolidateHours}
-                onChange={(e) => setConsolidateHours(e.target.checked)}
+            <TFField label="Default Due In (days)" hint='Set to 0 for "Upon Receipt"'>
+              <TFInput
+                type="number"
+                min="0"
+                value={defaultDueDays}
+                onChange={(e) => setDefaultDueDays(e.target.value)}
               />
-              Consolidate hours
-            </label>
-            <p className="text-xs text-gray-400 mt-1">When creating an invoice, merge time entries on the same day (same project and rate) into a single line item.</p>
+            </TFField>
           </div>
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Default Email Template</label>
-            <textarea className="border rounded p-2 w-full h-40 text-sm font-mono" value={emailTemplate}
-              onChange={(e) => setEmailTemplate(e.target.value)}
-              placeholder={`Hi {{client_name}},\n\nPlease find attached invoice #{{invoice_number}} for \${{total}}.\n\nPayment is due {{due_date}}.\n\nThank you for your business!\n\n{{your_name}}`} />
-            <p className="text-xs text-gray-400 mt-1">
-              Available variables: {'{{client_name}}'}, {'{{client_first_name}}'}, {'{{client_last_name}}'}, {'{{invoice_number}}'}, {'{{total}}'}, {'{{due_date}}'}, {'{{your_name}}'}
-            </p>
+            <TFCheckbox
+              id="consolidate-hours"
+              label="Consolidate hours"
+              description="When creating an invoice, merge time entries on the same day (same project and rate) into a single line item."
+              checked={consolidateHours}
+              onChange={(e) => setConsolidateHours(e.target.checked)}
+            />
           </div>
-        </div>
+          <div className="mt-4">
+            <TFField
+              label="Default Email Template"
+              hint={
+                <>
+                  Available variables: {'{{client_name}}'}, {'{{client_first_name}}'},{' '}
+                  {'{{client_last_name}}'}, {'{{invoice_number}}'}, {'{{total}}'}, {'{{due_date}}'},{' '}
+                  {'{{your_name}}'}
+                </>
+              }
+            >
+              <TFTextarea
+                className="h-40 font-mono"
+                value={emailTemplate}
+                onChange={(e) => setEmailTemplate(e.target.value)}
+                placeholder={`Hi {{client_name}},\n\nPlease find attached invoice #{{invoice_number}} for \${{total}}.\n\nPayment is due {{due_date}}.\n\nThank you for your business!\n\n{{your_name}}`}
+              />
+            </TFField>
+          </div>
+        </TFCard>
 
-        <div className="bg-white rounded-lg shadow p-4">
+        <TFCard>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">Email (SMTP)</h2>
-            <button type="button" onClick={() => {
-              setSmtpHost('smtp.gmail.com');
-              setSmtpPort('587');
-              setSmtpSecure(false);
-            }} className="text-sm text-indigo-600 hover:underline">
+            <TFCardTitle>Email (SMTP)</TFCardTitle>
+            <TFButton
+              type="button"
+              variant="link"
+              size="sm"
+              onClick={() => {
+                setSmtpHost('smtp.gmail.com');
+                setSmtpPort('587');
+                setSmtpSecure(false);
+              }}
+            >
               Use Gmail
-            </button>
+            </TFButton>
           </div>
-          <p className="text-xs text-gray-400 mb-4">Configure SMTP to send invoices by email. For Gmail, use an App Password (Google Account &rarr; Security &rarr; App Passwords).</p>
+          <p className="text-xs text-gray-400 mb-4">
+            Configure SMTP to send invoices by email. For Gmail, use an App Password (Google
+            Account &rarr; Security &rarr; App Passwords).
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
-              <input className="border rounded p-2 w-full" placeholder="smtp.gmail.com" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Port</label>
-              <input className="border rounded p-2 w-full" type="number" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username / Email</label>
-              <input className="border rounded p-2 w-full" placeholder="you@gmail.com" value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password / App Password</label>
-              <input className="border rounded p-2 w-full" type="password" placeholder="App Password" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">From Name</label>
-              <input className="border rounded p-2 w-full" placeholder="Your Name" value={smtpFromName} onChange={(e) => setSmtpFromName(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">From Email</label>
-              <input className="border rounded p-2 w-full" placeholder="you@gmail.com" value={smtpFromEmail} onChange={(e) => setSmtpFromEmail(e.target.value)} />
-            </div>
-            <div className="flex items-center space-x-2">
-              <input type="checkbox" id="smtpSecure" checked={smtpSecure} onChange={(e) => setSmtpSecure(e.target.checked)} />
-              <label htmlFor="smtpSecure" className="text-sm text-gray-700">Use SSL/TLS (port 465). Uncheck for STARTTLS (port 587).</label>
-            </div>
+            <TFField label="SMTP Host">
+              <TFInput
+                placeholder="smtp.gmail.com"
+                value={smtpHost}
+                onChange={(e) => setSmtpHost(e.target.value)}
+              />
+            </TFField>
+            <TFField label="SMTP Port">
+              <TFInput
+                type="number"
+                value={smtpPort}
+                onChange={(e) => setSmtpPort(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Username / Email">
+              <TFInput
+                placeholder="you@gmail.com"
+                value={smtpUser}
+                onChange={(e) => setSmtpUser(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Password / App Password">
+              <TFInput
+                type="password"
+                placeholder="App Password"
+                value={smtpPass}
+                onChange={(e) => setSmtpPass(e.target.value)}
+              />
+            </TFField>
+            <TFField label="From Name">
+              <TFInput
+                placeholder="Your Name"
+                value={smtpFromName}
+                onChange={(e) => setSmtpFromName(e.target.value)}
+              />
+            </TFField>
+            <TFField label="From Email">
+              <TFInput
+                placeholder="you@gmail.com"
+                value={smtpFromEmail}
+                onChange={(e) => setSmtpFromEmail(e.target.value)}
+              />
+            </TFField>
+            <TFCheckbox
+              id="smtp-secure"
+              label="Use SSL/TLS (port 465). Uncheck for STARTTLS (port 587)."
+              checked={smtpSecure}
+              onChange={(e) => setSmtpSecure(e.target.checked)}
+            />
           </div>
-          <button type="button" onClick={() => testSmtp.mutate()}
+          <TFButton
+            type="button"
+            variant="secondary"
+            onClick={() => testSmtp.mutate()}
             disabled={testSmtp.isPending}
-            className="mt-4 bg-gray-600 text-white px-4 py-2 rounded text-sm hover:bg-gray-700 disabled:opacity-50">
+            className="mt-4"
+          >
             {testSmtp.isPending ? 'Testing...' : 'Test Connection'}
-          </button>
-        </div>
+          </TFButton>
+        </TFCard>
 
-        <button type="submit" className="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700">
+        <TFButton type="submit" size="lg">
           Save Settings
-        </button>
+        </TFButton>
       </form>
 
       <div className="mt-6">
@@ -374,74 +456,87 @@ export default function SettingsPage() {
       </div>
 
       <form onSubmit={handleChangePassword} className="mt-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <h2 className="font-semibold mb-4">Change Password</h2>
+        <TFCard>
+          <TFCardTitle className="mb-4">Change Password</TFCardTitle>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-              <input type="password" required className="border rounded p-2 w-full" value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-              <input type="password" required className="border rounded p-2 w-full" value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)} />
-              <p className="text-xs text-gray-400 mt-1">Minimum 8 characters</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-              <input type="password" required className="border rounded p-2 w-full" value={confirmNewPassword}
-                onChange={(e) => setConfirmNewPassword(e.target.value)} />
-            </div>
+            <TFField label="Current Password" required>
+              <TFInput
+                type="password"
+                required
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+            </TFField>
+            <TFField label="New Password" required hint="Minimum 8 characters">
+              <TFInput
+                type="password"
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Confirm New Password" required>
+              <TFInput
+                type="password"
+                required
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+              />
+            </TFField>
           </div>
-          <button type="submit" className="mt-4 bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700">
+          <TFButton type="submit" size="lg" className="mt-4">
             Change Password
-          </button>
-        </div>
+          </TFButton>
+        </TFCard>
       </form>
 
       {isAdmin && (
-        <div className="bg-white rounded-lg shadow p-4 mt-6">
-          <h2 className="font-semibold mb-4">User Permissions</h2>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-left text-gray-600">
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Joined</th>
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <TFCard className="mt-6" padding="none">
+          <div className="px-4 pt-4">
+            <TFCardTitle className="mb-4">User Permissions</TFCardTitle>
+          </div>
+          <TFTable>
+            <TFTHead>
+              <TFTr>
+                <TFTh>Email</TFTh>
+                <TFTh>Name</TFTh>
+                <TFTh>Role</TFTh>
+                <TFTh>Joined</TFTh>
+                <TFTh>Actions</TFTh>
+              </TFTr>
+            </TFTHead>
+            <TFTBody>
               {users.map((u) => (
-                <tr key={u.id} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-3">{u.email}</td>
-                  <td className="px-4 py-3">{u.name || '-'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      u.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'
-                    }`}>{u.role}</span>
-                  </td>
-                  <td className="px-4 py-3">{new Date(u.created_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-3">
-                    <select
+                <TFTr key={u.id}>
+                  <TFTd>{u.email}</TFTd>
+                  <TFTd>{u.name || '-'}</TFTd>
+                  <TFTd>
+                    <TFBadge tone={statusTone(u.role)}>{u.role}</TFBadge>
+                  </TFTd>
+                  <TFTd>{new Date(u.created_at).toLocaleDateString()}</TFTd>
+                  <TFTd>
+                    <TFSelect
+                      size="sm"
+                      className="max-w-[120px]"
                       value={u.role}
                       onChange={(e) => updateRole.mutate({ id: u.id, role: e.target.value })}
-                      className="border rounded p-1 text-sm"
                     >
                       <option value="user">User</option>
                       <option value="admin">Admin</option>
-                    </select>
-                  </td>
-                </tr>
+                    </TFSelect>
+                  </TFTd>
+                </TFTr>
               ))}
               {users.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No users</td></tr>
+                <TFTr>
+                  <TFTd colSpan={5}>
+                    <TFEmpty>No users</TFEmpty>
+                  </TFTd>
+                </TFTr>
               )}
-            </tbody>
-          </table>
-        </div>
+            </TFTBody>
+          </TFTable>
+        </TFCard>
       )}
     </div>
   );

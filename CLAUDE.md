@@ -25,6 +25,7 @@ ALWAYS do the following on every meaningful response:
 
 4. Never skip updates, even if not explicitly asked.
 5. Treat these files as the source of truth.
+6. **Always reach for the TF component library before writing raw markup or one-off Tailwind classes.** Buttons, inputs, selects, textareas, cards, dialogs, badges, tables, dropdown menus, links, page headers, etc. all live in `frontend/src/components/tf/` and are exported from the `tf` barrel. Variants/colors are configured via cva (`tfButtonVariants`, `tfBadgeVariants`, `tfLinkVariants`, etc.) — use the existing semantic variants (`primary`, `success`, `danger`, `warning`, `secondary`, `outline`, `ghost`, `muted`, `link`, `linkDanger`) rather than reaching for raw `bg-*`/`text-*` classes. Add new variants to the cva config when a genuinely new style is needed; never duplicate inline styling. If a TF component is missing for a recurring pattern, add it to `frontend/src/components/tf/` (keeping it free of app-specific deps — see "Frontend Component Library" below).
 
 ## Project Overview
 
@@ -139,6 +140,28 @@ Single endpoint at `/graphql` (Apollo Server).
 - Generations are deduped per-invoice via an in-memory `inFlight` Map; on server restart `resetStaleGeneratingStatus` flips any leftover `generating` rows back to `pending`. Legacy invoices with `export_status='pending'` are kicked off lazily when `Query.invoice` is fetched. `deleteInvoice` deletes both export files.
 - `Query.invoice` exposes `export_status`/`export_error`/`export_generated_at`; the frontend polls (`refetchInterval` 2s while pending/generating) and disables Export PDF / Export CSV / Send Email until status is `ready`. A `regenerateInvoiceExports(id)` mutation is the manual retry path (used by a "Retry" button when status is `failed`).
 - Export downloads come from `GET /api/invoices/:id/export.pdf` and `.csv` (auth via `Authorization: Bearer` header or `?token=` query param). The route awaits `ensureExportsReady` so a missing file triggers regeneration synchronously. `sendInvoice(attachPdf: Boolean)` reads the on-disk PDF directly — no more base64 round-trip from the browser, and it errors if `export_status !== 'ready'`.
+
+## Frontend Component Library (TF)
+
+- All reusable UI primitives live in `frontend/src/components/tf/` and are re-exported from `frontend/src/components/tf/index.ts`. Pages should import from the barrel: `import { TFButton, TFCard, TFField, TFInput, ... } from '../components/tf'`.
+- Stack: shadcn-style — `class-variance-authority` (cva) for variants, `clsx` + `tailwind-merge` exposed via `cn()` in `frontend/src/lib/utils.ts`, Radix UI primitives (`@radix-ui/react-dialog`, `@radix-ui/react-dropdown-menu`, `@radix-ui/react-slot`).
+- **Hard rule: TF components must be reusable in any context with no app-level dependencies.** Concretely:
+  - No imports from `react-router-dom`. `TFButton` and `TFLink` use Radix `Slot` and accept `asChild` so callers wrap a router `Link` themselves: `<TFButton asChild><Link to="...">…</Link></TFButton>`.
+  - No imports from app modules (auth context, GraphQL client, query hooks, types). If a primitive needs domain logic to be useful, the domain logic lives outside the TF library — e.g. TimeForge's invoice/user status → badge tone mapping is in `frontend/src/lib/statusTone.ts` and just feeds `TFBadge tone={...}`.
+  - Internal cross-references between TF components are fine (e.g. `TFField` uses `TFLabel`, `TFConfirm` composes `TFDialog` + `TFButton`, `TFButtonMenu` composes `TFDropdownMenu` + `TFButton`).
+- Components and what they replaced:
+  - `TFButton` (10 variants × 4 sizes via `tfButtonVariants`) — replaces all `bg-indigo-600 text-white px-4 py-2 rounded` patterns. `asChild` prop turns it into a slot for router links / file-upload labels.
+  - `TFInput`, `TFTextarea`, `TFSelect` — form controls with `tone` (default/error) and `size` (sm/md/lg) variants.
+  - `TFLabel`, `TFField` — `TFField` wraps label + control + hint/error and is the preferred way to render a form field. `required` prop adds the red asterisk.
+  - `TFCheckbox` — checkbox with optional `label` + `description` text rendered as a clickable `<label>`.
+  - `TFCard` (`padding`: none/sm/md/lg, `bordered`: bool), `TFCardHeader`, `TFCardTitle`, `TFCardContent` — replaces `bg-white rounded-lg shadow p-4`.
+  - `TFBadge` (`tone`: neutral/primary/success/danger/warning/info/purple, `size`: xs/sm/md/lg) — replaces all `px-2 py-1 rounded text-xs font-medium ${color}` patterns.
+  - `TFTable`, `TFTHead`, `TFTBody`, `TFTr`, `TFTh`, `TFTd` — table primitives with the standard `bg-gray-50` header + hover row styling baked in.
+  - `TFDialog`, `TFDialogContent` (size: sm/md/lg/xl/2xl), `TFDialogHeader`, `TFDialogTitle`, `TFDialogDescription`, `TFDialogBody`, `TFDialogFooter` — Radix Dialog with TF chrome. **`TFConfirm`** is a thin wrapper for confirm-then-act prompts (the old `ConfirmModal` is now a backwards-compat shim that renders `TFConfirm`).
+  - `TFDropdownMenu`, `TFDropdownMenuTrigger`, `TFDropdownMenuContent`, `TFDropdownMenuItem`, `TFDropdownMenuSeparator`, `TFDropdownMenuLabel` — Radix DropdownMenu with TF chrome. **`TFButtonMenu`** is a convenience wrapper that takes `{ trigger: TFButtonProps, items: { label, onSelect, destructive?, disabled? }[] }` and is what replaced the old hand-rolled `SplitDropdown` on the invoice detail page.
+  - `TFLink` — styled anchor (also supports `asChild`) for inline text links; for button-styled router links use `<TFButton asChild><Link ...></TFButton>`.
+  - `TFLoading`, `TFSpinner`, `TFEmpty`, `TFPageHeader` — display primitives for the common loading/empty/header patterns.
+- TimeForge-specific helpers that are *not* part of TF: `frontend/src/lib/statusTone.ts` exports `statusTone(status)` which maps invoice statuses (`draft`/`sent`/`paid`/`overdue`/`cancelled`), backup run statuses, invoice export statuses, and user roles to a `TFBadgeTone`. Always feed the result of `statusTone(...)` into `<TFBadge tone={...}>` — don't hardcode tones at call sites.
 
 ## Backup Restore
 

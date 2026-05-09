@@ -4,6 +4,14 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { gql } from '../api/client';
 import { Project } from '../types';
+import { cn } from '../lib/utils';
+import {
+  TFButton,
+  TFCard,
+  TFField,
+  TFLink,
+  TFSelect,
+} from '../components/tf';
 
 const PROJECTS_QUERY = `query { projects { id name client_name default_rate } }`;
 
@@ -37,14 +45,12 @@ const NONE = '-- None --';
 function parseExcelTime(val: any): string | null {
   if (val == null || val === '') return null;
   if (typeof val === 'number') {
-    // Excel serial time (fraction of day)
     const totalSeconds = Math.round(val * 86400);
     const h = Math.floor(totalSeconds / 3600);
     const m = Math.floor((totalSeconds % 3600) / 60);
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   }
   const s = String(val).trim();
-  // Try to extract time from datetime string like "3/26/2026, 10:00:00 AM"
   const dtMatch = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i);
   if (dtMatch) {
     let h = parseInt(dtMatch[1]);
@@ -62,12 +68,10 @@ function parseExcelTime(val: any): string | null {
 function parseExcelDate(val: any): string | null {
   if (val == null || val === '') return null;
   if (typeof val === 'number') {
-    // Excel serial date
     const date = new Date((val - 25569) * 86400 * 1000);
     return date.toISOString().split('T')[0];
   }
   const s = String(val).trim();
-  // Try M/D/YYYY or MM/DD/YYYY
   const match = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
   if (match) {
     const month = match[1].padStart(2, '0');
@@ -75,7 +79,6 @@ function parseExcelDate(val: any): string | null {
     const year = match[3].length === 2 ? '20' + match[3] : match[3];
     return `${year}-${month}-${day}`;
   }
-  // Try YYYY-MM-DD
   const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (isoMatch) return isoMatch[0];
   return null;
@@ -91,7 +94,14 @@ export default function ImportPage() {
   const qc = useQueryClient();
   const [rawData, setRawData] = useState<RawRow[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<ColumnMapping>({ date: NONE, start: NONE, end: NONE, description: NONE, paid: NONE, invoiceNumber: NONE });
+  const [mapping, setMapping] = useState<ColumnMapping>({
+    date: NONE,
+    start: NONE,
+    end: NONE,
+    description: NONE,
+    paid: NONE,
+    invoiceNumber: NONE,
+  });
   const [projectId, setProjectId] = useState('');
   const [fileName, setFileName] = useState('');
 
@@ -109,27 +119,55 @@ export default function ImportPage() {
       let current = '';
       let inQuotes = false;
       for (const ch of line) {
-        if (ch === '"') { inQuotes = !inQuotes; }
-        else if (ch === ',' && !inQuotes) { values.push(current.trim()); current = ''; }
-        else { current += ch; }
+        if (ch === '"') {
+          inQuotes = !inQuotes;
+        } else if (ch === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
       }
       values.push(current.trim());
       const row: RawRow = {};
-      headers.forEach((h, i) => { row[h] = values[i] ?? ''; });
+      headers.forEach((h, i) => {
+        row[h] = values[i] ?? '';
+      });
       return row;
     });
   }
 
   function applyAutoMapping(cols: string[]) {
-    const autoMap: ColumnMapping = { date: NONE, start: NONE, end: NONE, description: NONE, paid: NONE, invoiceNumber: NONE };
+    const autoMap: ColumnMapping = {
+      date: NONE,
+      start: NONE,
+      end: NONE,
+      description: NONE,
+      paid: NONE,
+      invoiceNumber: NONE,
+    };
     for (const col of cols) {
       const lower = col.toLowerCase();
       if (lower.includes('date') && autoMap.date === NONE) autoMap.date = col;
-      else if ((lower.includes('start') || lower === 'in') && autoMap.start === NONE) autoMap.start = col;
-      else if ((lower.includes('end') || lower === 'out' || lower.includes('stop')) && autoMap.end === NONE) autoMap.end = col;
-      else if ((lower.includes('desc') || lower.includes('note') || lower.includes('task')) && autoMap.description === NONE) autoMap.description = col;
-      else if ((lower.includes('paid') || lower.includes('billed') || lower.includes('status')) && autoMap.paid === NONE) autoMap.paid = col;
-      else if ((lower.includes('invoice') || lower.includes('inv')) && autoMap.invoiceNumber === NONE) autoMap.invoiceNumber = col;
+      else if ((lower.includes('start') || lower === 'in') && autoMap.start === NONE)
+        autoMap.start = col;
+      else if (
+        (lower.includes('end') || lower === 'out' || lower.includes('stop')) &&
+        autoMap.end === NONE
+      )
+        autoMap.end = col;
+      else if (
+        (lower.includes('desc') || lower.includes('note') || lower.includes('task')) &&
+        autoMap.description === NONE
+      )
+        autoMap.description = col;
+      else if (
+        (lower.includes('paid') || lower.includes('billed') || lower.includes('status')) &&
+        autoMap.paid === NONE
+      )
+        autoMap.paid = col;
+      else if ((lower.includes('invoice') || lower.includes('inv')) && autoMap.invoiceNumber === NONE)
+        autoMap.invoiceNumber = col;
     }
     setMapping(autoMap);
   }
@@ -165,10 +203,21 @@ export default function ImportPage() {
     const endStr = mapping.end !== NONE ? parseExcelTime(row[mapping.end]) : null;
     const description = mapping.description !== NONE ? String(row[mapping.description] || '') : '';
     const paid = mapping.paid !== NONE ? parseBool(row[mapping.paid]) : false;
-    const invoiceNumber = mapping.invoiceNumber !== NONE ? String(row[mapping.invoiceNumber] || '') : '';
+    const invoiceNumber =
+      mapping.invoiceNumber !== NONE ? String(row[mapping.invoiceNumber] || '') : '';
 
     if (!dateStr || !startStr || !endStr) {
-      return { date: dateStr || '', start_time: '', end_time: '', description, paid, invoice_number: invoiceNumber, hours: 0, valid: false, error: 'Missing date, start, or end time' };
+      return {
+        date: dateStr || '',
+        start_time: '',
+        end_time: '',
+        description,
+        paid,
+        invoice_number: invoiceNumber,
+        hours: 0,
+        valid: false,
+        error: 'Missing date, start, or end time',
+      };
     }
 
     const start_time = `${dateStr}T${startStr}:00`;
@@ -177,15 +226,44 @@ export default function ImportPage() {
     const endMs = new Date(end_time).getTime();
 
     if (isNaN(startMs) || isNaN(endMs)) {
-      return { date: dateStr, start_time, end_time, description, paid, invoice_number: invoiceNumber, hours: 0, valid: false, error: 'Invalid date/time' };
+      return {
+        date: dateStr,
+        start_time,
+        end_time,
+        description,
+        paid,
+        invoice_number: invoiceNumber,
+        hours: 0,
+        valid: false,
+        error: 'Invalid date/time',
+      };
     }
 
     const hours = (endMs - startMs) / 3600000;
     if (hours <= 0) {
-      return { date: dateStr, start_time, end_time, description, paid, invoice_number: invoiceNumber, hours: 0, valid: false, error: 'End time must be after start time' };
+      return {
+        date: dateStr,
+        start_time,
+        end_time,
+        description,
+        paid,
+        invoice_number: invoiceNumber,
+        hours: 0,
+        valid: false,
+        error: 'End time must be after start time',
+      };
     }
 
-    return { date: dateStr, start_time, end_time, description, paid, invoice_number: invoiceNumber, hours, valid: true };
+    return {
+      date: dateStr,
+      start_time,
+      end_time,
+      description,
+      paid,
+      invoice_number: invoiceNumber,
+      hours,
+      valid: true,
+    };
   });
 
   const validEntries = parsed.filter((e) => e.valid);
@@ -203,7 +281,7 @@ export default function ImportPage() {
       }));
       return gql<{ importTimeEntries: number }>(
         `mutation($entries: [ImportTimeEntryInput!]!) { importTimeEntries(entries: $entries) }`,
-        { entries }
+        { entries },
       );
     },
     onSuccess: (data) => {
@@ -221,82 +299,109 @@ export default function ImportPage() {
 
   return (
     <div>
-      <Link to="/time" className="text-indigo-600 hover:underline text-sm">&larr; Back to Time Entries</Link>
+      <TFLink asChild>
+        <Link to="/time">&larr; Back to Time Entries</Link>
+      </TFLink>
       <h1 className="text-2xl font-bold mb-6 mt-1">Import Time Entries</h1>
 
-      {/* Step 1: File Upload */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
+      <TFCard className="mb-6">
         <h2 className="font-semibold mb-3">1. Upload CSV File</h2>
         <div className="flex items-center gap-4">
-          <label className="cursor-pointer bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 text-sm">
-            Choose File
-            <input type="file" accept=".csv" onChange={handleFile} className="hidden" />
-          </label>
-          {fileName && <span className="text-sm text-gray-600">{fileName} ({rawData.length} rows)</span>}
+          <TFButton asChild>
+            <label className="cursor-pointer">
+              Choose File
+              <input type="file" accept=".csv" onChange={handleFile} className="hidden" />
+            </label>
+          </TFButton>
+          {fileName && (
+            <span className="text-sm text-gray-600">
+              {fileName} ({rawData.length} rows)
+            </span>
+          )}
         </div>
-      </div>
+      </TFCard>
 
       {columns.length > 0 && (
         <>
-          {/* Step 2: Project Selection */}
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <TFCard className="mb-6">
             <h2 className="font-semibold mb-3">2. Select Project</h2>
-            <select className="border rounded p-2 w-full max-w-md" value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}>
+            <TFSelect
+              className="max-w-md"
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+            >
               <option value="">Select Project</option>
               {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} ({p.client_name})</option>
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.client_name})
+                </option>
               ))}
-            </select>
+            </TFSelect>
             {selectedProject && (
-              <p className="text-sm text-gray-500 mt-1">Default rate: ${Number(selectedProject.default_rate).toFixed(2)}/hr</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Default rate: ${Number(selectedProject.default_rate).toFixed(2)}/hr
+              </p>
             )}
-          </div>
+          </TFCard>
 
-          {/* Step 3: Column Mapping */}
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <TFCard className="mb-6">
             <h2 className="font-semibold mb-3">3. Map Columns</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {([
-                ['date', 'Date *'],
-                ['start', 'Start Time *'],
-                ['end', 'End Time *'],
-                ['description', 'Description'],
-                ['paid', 'Paid/Billed'],
-                ['invoiceNumber', 'Invoice Number'],
-              ] as [keyof ColumnMapping, string][]).map(([key, label]) => (
-                <div key={key}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-                  <select className="border rounded p-2 w-full" value={mapping[key]}
-                    onChange={(e) => setMapping({ ...mapping, [key]: e.target.value })}>
+              {(
+                [
+                  ['date', 'Date', true],
+                  ['start', 'Start Time', true],
+                  ['end', 'End Time', true],
+                  ['description', 'Description', false],
+                  ['paid', 'Paid/Billed', false],
+                  ['invoiceNumber', 'Invoice Number', false],
+                ] as [keyof ColumnMapping, string, boolean][]
+              ).map(([key, label, required]) => (
+                <TFField key={key} label={label} required={required}>
+                  <TFSelect
+                    value={mapping[key]}
+                    onChange={(e) => setMapping({ ...mapping, [key]: e.target.value })}
+                  >
                     <option value={NONE}>{NONE}</option>
-                    {columns.map((col) => <option key={col} value={col}>{col}</option>)}
-                  </select>
-                </div>
+                    {columns.map((col) => (
+                      <option key={col} value={col}>
+                        {col}
+                      </option>
+                    ))}
+                  </TFSelect>
+                </TFField>
               ))}
             </div>
-          </div>
+          </TFCard>
 
-          {/* Step 4: Preview */}
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <TFCard className="mb-6">
             <div className="flex justify-between items-center mb-3">
-              <h2 className="font-semibold">4. Preview ({validEntries.length} valid, {invalidEntries.length} invalid)</h2>
-              <button
+              <h2 className="font-semibold">
+                4. Preview ({validEntries.length} valid, {invalidEntries.length} invalid)
+              </h2>
+              <TFButton
                 onClick={() => importMutation.mutate()}
                 disabled={!canImport || importMutation.isPending}
-                className="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
                 {importMutation.isPending ? 'Importing...' : `Import ${validEntries.length} Entries`}
-              </button>
+              </TFButton>
             </div>
 
             {invalidEntries.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
-                <p className="text-sm text-red-700 font-medium mb-1">{invalidEntries.length} rows will be skipped:</p>
+                <p className="text-sm text-red-700 font-medium mb-1">
+                  {invalidEntries.length} rows will be skipped:
+                </p>
                 {invalidEntries.slice(0, 5).map((e, i) => (
-                  <p key={i} className="text-xs text-red-600">Row {parsed.indexOf(e) + 2}: {e.error}</p>
+                  <p key={i} className="text-xs text-red-600">
+                    Row {parsed.indexOf(e) + 2}: {e.error}
+                  </p>
                 ))}
-                {invalidEntries.length > 5 && <p className="text-xs text-red-600">...and {invalidEntries.length - 5} more</p>}
+                {invalidEntries.length > 5 && (
+                  <p className="text-xs text-red-600">
+                    ...and {invalidEntries.length - 5} more
+                  </p>
+                )}
               </div>
             )}
 
@@ -316,15 +421,33 @@ export default function ImportPage() {
                 </thead>
                 <tbody>
                   {parsed.slice(0, 50).map((e, i) => (
-                    <tr key={i} className={`border-b last:border-0 ${e.valid ? '' : 'bg-red-50'}`}>
+                    <tr key={i} className={cn('border-b last:border-0', !e.valid && 'bg-red-50')}>
                       <td className="py-2 pr-4">
-                        {e.valid
-                          ? <span className="text-green-600 text-xs font-medium">OK</span>
-                          : <span className="text-red-600 text-xs font-medium" title={e.error}>Error</span>}
+                        {e.valid ? (
+                          <span className="text-green-600 text-xs font-medium">OK</span>
+                        ) : (
+                          <span className="text-red-600 text-xs font-medium" title={e.error}>
+                            Error
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 pr-4">{e.date}</td>
-                      <td className="py-2 pr-4">{e.start_time ? new Date(e.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
-                      <td className="py-2 pr-4">{e.end_time ? new Date(e.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                      <td className="py-2 pr-4">
+                        {e.start_time
+                          ? new Date(e.start_time).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '-'}
+                      </td>
+                      <td className="py-2 pr-4">
+                        {e.end_time
+                          ? new Date(e.end_time).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '-'}
+                      </td>
                       <td className="py-2 pr-4">{e.valid ? e.hours.toFixed(2) : '-'}</td>
                       <td className="py-2 pr-4 max-w-[200px] truncate">{e.description || '-'}</td>
                       <td className="py-2 pr-4">{e.paid ? 'Yes' : 'No'}</td>
@@ -334,10 +457,12 @@ export default function ImportPage() {
                 </tbody>
               </table>
               {parsed.length > 50 && (
-                <p className="text-sm text-gray-500 mt-2">Showing first 50 of {parsed.length} rows</p>
+                <p className="text-sm text-gray-500 mt-2">
+                  Showing first 50 of {parsed.length} rows
+                </p>
               )}
             </div>
-          </div>
+          </TFCard>
         </>
       )}
     </div>

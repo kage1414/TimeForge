@@ -2,7 +2,17 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { gql } from '../api/client';
-import ConfirmModal from './ConfirmModal';
+import {
+  TFBadge,
+  TFButton,
+  TFCard,
+  TFCardTitle,
+  TFCheckbox,
+  TFConfirm,
+  TFField,
+  TFInput,
+  TFSelect,
+} from './tf';
 
 interface BackupDestination {
   id: number;
@@ -38,7 +48,6 @@ interface FormState {
   id: number | null;
   name: string;
   provider: 's3' | 'nextcloud';
-  // s3
   s3Endpoint: string;
   s3Region: string;
   s3Bucket: string;
@@ -46,7 +55,6 @@ interface FormState {
   s3SecretAccessKey: string;
   s3Prefix: string;
   s3PathStyle: boolean;
-  // nextcloud
   ncUrl: string;
   ncUser: string;
   ncPass: string;
@@ -114,6 +122,7 @@ export default function BackupSettings() {
   const [restoreDestId, setRestoreDestId] = useState<number | ''>('');
   const [restoreFilename, setRestoreFilename] = useState<string>('');
   const [confirmRestore, setConfirmRestore] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const { data } = useQuery<{ backupConfigured: boolean; backupDestinations: BackupDestination[] }>({
     queryKey: ['backupDestinations'],
@@ -136,7 +145,6 @@ export default function BackupSettings() {
       ),
   });
 
-  // Reset selected backup when destination changes (or when new files load).
   useEffect(() => {
     setRestoreFilename('');
   }, [restoreDestId]);
@@ -169,14 +177,14 @@ export default function BackupSettings() {
           `mutation($input: CreateBackupDestinationInput!) {
             createBackupDestination(input: $input) { id }
           }`,
-          { input: { name: form.name, provider: form.provider, ...payload } }
+          { input: { name: form.name, provider: form.provider, ...payload } },
         );
       }
       return gql(
         `mutation($id: Int!, $input: UpdateBackupDestinationInput!) {
           updateBackupDestination(id: $id, input: $input) { id }
         }`,
-        { id: form.id, input: { name: form.name, ...payload } }
+        { id: form.id, input: { name: form.name, ...payload } },
       );
     },
     onSuccess: () => {
@@ -209,7 +217,7 @@ export default function BackupSettings() {
     mutationFn: (id: number) =>
       gql<{ runBackupDestination: { filename: string; bytes: number } }>(
         `mutation($id: Int!) { runBackupDestination(id: $id) { filename bytes } }`,
-        { id }
+        { id },
       ),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['backupDestinations'] });
@@ -285,10 +293,11 @@ export default function BackupSettings() {
   const files = filesQuery.data?.backupDestinationFiles ?? [];
   const filesError = filesQuery.error as Error | null;
   const selectedFile = files.find((f) => f.filename === restoreFilename) || null;
+  const deletingDest = destinations.find((d) => d.id === confirmDeleteId) || null;
 
   const restoreSection = (
-    <div className="bg-white rounded-lg shadow p-4">
-      <h2 className="font-semibold mb-2">Restore from Backup</h2>
+    <TFCard>
+      <TFCardTitle className="mb-2">Restore from Backup</TFCardTitle>
       <p className="text-sm text-gray-600 mb-3">
         Pick a backup from one of your destinations. Restoring will{' '}
         <strong className="text-red-600">replace all of your data</strong> (clients, projects,
@@ -302,10 +311,8 @@ export default function BackupSettings() {
         </p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
-            <select
-              className="border rounded p-2 w-full"
+          <TFField label="Destination">
+            <TFSelect
               value={restoreDestId}
               onChange={(e) =>
                 setRestoreDestId(e.target.value === '' ? '' : Number(e.target.value))
@@ -318,12 +325,13 @@ export default function BackupSettings() {
                   {d.name} ({d.provider === 's3' ? 'S3' : 'Nextcloud'})
                 </option>
               ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Backup</label>
-            <select
-              className="border rounded p-2 w-full disabled:bg-gray-50"
+            </TFSelect>
+          </TFField>
+          <TFField
+            label="Backup"
+            hint={selectedFile ? selectedFile.filename : undefined}
+          >
+            <TFSelect
               value={restoreFilename}
               onChange={(e) => setRestoreFilename(e.target.value)}
               disabled={
@@ -347,13 +355,8 @@ export default function BackupSettings() {
                   {formatBackupDate(f)} — {formatSize(f.size)}
                 </option>
               ))}
-            </select>
-            {selectedFile && (
-              <p className="text-xs text-gray-400 mt-1 truncate" title={selectedFile.filename}>
-                {selectedFile.filename}
-              </p>
-            )}
-          </div>
+            </TFSelect>
+          </TFField>
         </div>
       )}
 
@@ -363,20 +366,18 @@ export default function BackupSettings() {
 
       {destinations.length > 0 && (
         <div className="mt-4">
-          <button
-            type="button"
+          <TFButton
+            variant="danger"
+            size="sm"
             onClick={() => setConfirmRestore(true)}
-            disabled={
-              typeof restoreDestId !== 'number' || !restoreFilename || restore.isPending
-            }
-            className="bg-red-600 text-white text-sm px-3 py-1.5 rounded hover:bg-red-700 disabled:opacity-50"
+            disabled={typeof restoreDestId !== 'number' || !restoreFilename || restore.isPending}
           >
             {restore.isPending ? 'Restoring…' : 'Restore selected backup'}
-          </button>
+          </TFButton>
         </div>
       )}
 
-      <ConfirmModal
+      <TFConfirm
         open={confirmRestore}
         title="Restore from backup?"
         message={
@@ -395,289 +396,291 @@ export default function BackupSettings() {
         }}
         onCancel={() => setConfirmRestore(false)}
       />
-    </div>
+    </TFCard>
   );
 
   if (!configured) {
     return (
-      <div className="bg-white rounded-lg shadow p-4">
-        <h2 className="font-semibold mb-2">Backups</h2>
+      <TFCard>
+        <TFCardTitle className="mb-2">Backups</TFCardTitle>
         <p className="text-sm text-gray-600">
-          Backups are disabled. Set <code className="bg-gray-100 px-1 py-0.5 rounded">BACKUP_ENCRYPTION_KEY</code> in
-          the backend environment (32 bytes hex, e.g. <code className="bg-gray-100 px-1 py-0.5 rounded">openssl rand -hex 32</code>).
+          Backups are disabled. Set{' '}
+          <code className="bg-gray-100 px-1 py-0.5 rounded">BACKUP_ENCRYPTION_KEY</code> in the
+          backend environment (32 bytes hex, e.g.{' '}
+          <code className="bg-gray-100 px-1 py-0.5 rounded">openssl rand -hex 32</code>).
         </p>
-      </div>
+      </TFCard>
     );
   }
 
   return (
     <div className="space-y-6">
-    <div className="bg-white rounded-lg shadow p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold">Backups</h2>
-        {!showForm && (
-          <button
-            type="button"
-            onClick={startNew}
-            className="bg-indigo-600 text-white text-sm px-3 py-1.5 rounded hover:bg-indigo-700"
-          >
-            Add Destination
-          </button>
+      <TFCard>
+        <div className="flex items-center justify-between mb-4">
+          <TFCardTitle>Backups</TFCardTitle>
+          {!showForm && (
+            <TFButton size="sm" onClick={startNew}>
+              Add Destination
+            </TFButton>
+          )}
+        </div>
+
+        {destinations.length === 0 && !showForm && (
+          <p className="text-sm text-gray-500">No backup destinations configured.</p>
         )}
-      </div>
 
-      {destinations.length === 0 && !showForm && (
-        <p className="text-sm text-gray-500">No backup destinations configured.</p>
-      )}
-
-      {destinations.length > 0 && (
-        <ul className="divide-y border rounded">
-          {destinations.map((d) => (
-            <li key={d.id} className="p-3 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium">{d.name}</span>
-                  <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
-                    {d.provider === 's3' ? 'S3' : 'Nextcloud'}
-                  </span>
-                  {d.last_run_status === 'ok' && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-800">last: ok</span>
-                  )}
-                  {d.last_run_status === 'error' && (
-                    <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-800">last: error</span>
-                  )}
-                </div>
-                <div className="text-xs text-gray-500 mt-1 truncate">
-                  {d.provider === 's3'
-                    ? `${d.s3_bucket}${d.s3_prefix ? ` / ${d.s3_prefix}` : ''} @ ${d.s3_endpoint || `s3.${d.s3_region}.amazonaws.com`}`
-                    : `${d.nextcloud_username}@${d.nextcloud_base_url}${d.nextcloud_path ? ` (${d.nextcloud_path})` : ''}`}
-                </div>
-                {d.last_run_at && (
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    Last run: {new Date(d.last_run_at).toLocaleString()}
-                    {d.last_run_status === 'error' && d.last_run_error ? ` — ${d.last_run_error}` : ''}
+        {destinations.length > 0 && (
+          <ul className="divide-y border rounded">
+            {destinations.map((d) => (
+              <li key={d.id} className="p-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium">{d.name}</span>
+                    <TFBadge tone="neutral" size="sm">
+                      {d.provider === 's3' ? 'S3' : 'Nextcloud'}
+                    </TFBadge>
+                    {d.last_run_status === 'ok' && (
+                      <TFBadge tone="success" size="sm">
+                        last: ok
+                      </TFBadge>
+                    )}
+                    {d.last_run_status === 'error' && (
+                      <TFBadge tone="danger" size="sm">
+                        last: error
+                      </TFBadge>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => testRun.mutate(d.id)}
-                  disabled={testRun.isPending}
-                  className="text-sm border border-gray-300 px-2 py-1 rounded hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Test
-                </button>
-                <button
-                  type="button"
-                  onClick={() => backupNow.mutate(d.id)}
-                  disabled={backupNow.isPending}
-                  className="text-sm bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  {backupNow.isPending ? 'Backing up…' : 'Backup Now'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => startEdit(d)}
-                  className="text-sm text-indigo-600 hover:underline"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Delete backup destination "${d.name}"?`)) remove.mutate(d.id);
-                  }}
-                  className="text-sm text-red-600 hover:underline"
-                >
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+                  <div className="text-xs text-gray-500 mt-1 truncate">
+                    {d.provider === 's3'
+                      ? `${d.s3_bucket}${d.s3_prefix ? ` / ${d.s3_prefix}` : ''} @ ${
+                          d.s3_endpoint || `s3.${d.s3_region}.amazonaws.com`
+                        }`
+                      : `${d.nextcloud_username}@${d.nextcloud_base_url}${
+                          d.nextcloud_path ? ` (${d.nextcloud_path})` : ''
+                        }`}
+                  </div>
+                  {d.last_run_at && (
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      Last run: {new Date(d.last_run_at).toLocaleString()}
+                      {d.last_run_status === 'error' && d.last_run_error
+                        ? ` — ${d.last_run_error}`
+                        : ''}
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <TFButton
+                    variant="outline"
+                    size="sm"
+                    onClick={() => testRun.mutate(d.id)}
+                    disabled={testRun.isPending}
+                  >
+                    Test
+                  </TFButton>
+                  <TFButton
+                    size="sm"
+                    onClick={() => backupNow.mutate(d.id)}
+                    disabled={backupNow.isPending}
+                  >
+                    {backupNow.isPending ? 'Backing up…' : 'Backup Now'}
+                  </TFButton>
+                  <TFButton variant="link" size="sm" onClick={() => startEdit(d)}>
+                    Edit
+                  </TFButton>
+                  <TFButton
+                    variant="linkDanger"
+                    size="sm"
+                    onClick={() => setConfirmDeleteId(d.id)}
+                  >
+                    Delete
+                  </TFButton>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
 
-      {showForm && (
-        <form
-          onSubmit={(ev) => {
-            ev.preventDefault();
-            if (form.id == null && form.provider === 's3' && !form.s3SecretAccessKey) {
-              toast.error('Secret access key is required');
-              return;
-            }
-            if (form.id == null && form.provider === 'nextcloud' && !form.ncPass) {
-              toast.error('App password is required');
-              return;
-            }
-            save.mutate();
-          }}
-          className="mt-4 border-t pt-4 space-y-3"
-        >
-          <h3 className="font-semibold">{form.id == null ? 'New backup destination' : 'Edit backup destination'}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-              <input
-                required
-                className="border rounded p-2 w-full"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Provider *</label>
-              <select
-                disabled={form.id != null}
-                className="border rounded p-2 w-full disabled:bg-gray-50"
-                value={form.provider}
-                onChange={(e) => setForm({ ...form, provider: e.target.value as 's3' | 'nextcloud' })}
-              >
-                <option value="s3">S3 / S3-compatible</option>
-                <option value="nextcloud">Nextcloud (WebDAV)</option>
-              </select>
-            </div>
-          </div>
-
-          {form.provider === 's3' && (
+        {showForm && (
+          <form
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              if (form.id == null && form.provider === 's3' && !form.s3SecretAccessKey) {
+                toast.error('Secret access key is required');
+                return;
+              }
+              if (form.id == null && form.provider === 'nextcloud' && !form.ncPass) {
+                toast.error('App password is required');
+                return;
+              }
+              save.mutate();
+            }}
+            className="mt-4 border-t pt-4 space-y-3"
+          >
+            <h3 className="font-semibold">
+              {form.id == null ? 'New backup destination' : 'Edit backup destination'}
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Endpoint</label>
-                <input
-                  className="border rounded p-2 w-full"
-                  placeholder="Leave blank for AWS S3 (e.g. https://s3.us-west-002.backblazeb2.com)"
-                  value={form.s3Endpoint}
-                  onChange={(e) => setForm({ ...form, s3Endpoint: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Region *</label>
-                <input
+              <TFField label="Name" required>
+                <TFInput
                   required
-                  className="border rounded p-2 w-full"
-                  value={form.s3Region}
-                  onChange={(e) => setForm({ ...form, s3Region: e.target.value })}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Bucket *</label>
-                <input
-                  required
-                  className="border rounded p-2 w-full"
-                  value={form.s3Bucket}
-                  onChange={(e) => setForm({ ...form, s3Bucket: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Access Key ID *</label>
-                <input
-                  required
-                  className="border rounded p-2 w-full"
-                  value={form.s3AccessKeyId}
-                  onChange={(e) => setForm({ ...form, s3AccessKeyId: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Secret Access Key {form.id != null && <span className="text-gray-400 font-normal">(leave blank to keep)</span>}
-                </label>
-                <input
-                  type="password"
-                  className="border rounded p-2 w-full"
-                  value={form.s3SecretAccessKey}
-                  onChange={(e) => setForm({ ...form, s3SecretAccessKey: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prefix</label>
-                <input
-                  className="border rounded p-2 w-full"
-                  placeholder="e.g. timeforge/backups"
-                  value={form.s3Prefix}
-                  onChange={(e) => setForm({ ...form, s3Prefix: e.target.value })}
-                />
-              </div>
-              <div className="flex items-center gap-2 pt-6">
-                <input
-                  type="checkbox"
-                  id="path-style"
-                  checked={form.s3PathStyle}
-                  onChange={(e) => setForm({ ...form, s3PathStyle: e.target.checked })}
-                />
-                <label htmlFor="path-style" className="text-sm text-gray-700">
-                  Force path-style URLs (required for some non-AWS providers)
-                </label>
-              </div>
+              </TFField>
+              <TFField label="Provider" required>
+                <TFSelect
+                  disabled={form.id != null}
+                  value={form.provider}
+                  onChange={(e) =>
+                    setForm({ ...form, provider: e.target.value as 's3' | 'nextcloud' })
+                  }
+                >
+                  <option value="s3">S3 / S3-compatible</option>
+                  <option value="nextcloud">Nextcloud (WebDAV)</option>
+                </TFSelect>
+              </TFField>
             </div>
-          )}
 
-          {form.provider === 'nextcloud' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Server URL *</label>
-                <input
+            {form.provider === 's3' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <TFField label="Endpoint" className="md:col-span-2">
+                  <TFInput
+                    placeholder="Leave blank for AWS S3 (e.g. https://s3.us-west-002.backblazeb2.com)"
+                    value={form.s3Endpoint}
+                    onChange={(e) => setForm({ ...form, s3Endpoint: e.target.value })}
+                  />
+                </TFField>
+                <TFField label="Region" required>
+                  <TFInput
+                    required
+                    value={form.s3Region}
+                    onChange={(e) => setForm({ ...form, s3Region: e.target.value })}
+                  />
+                </TFField>
+                <TFField label="Bucket" required>
+                  <TFInput
+                    required
+                    value={form.s3Bucket}
+                    onChange={(e) => setForm({ ...form, s3Bucket: e.target.value })}
+                  />
+                </TFField>
+                <TFField label="Access Key ID" required>
+                  <TFInput
+                    required
+                    value={form.s3AccessKeyId}
+                    onChange={(e) => setForm({ ...form, s3AccessKeyId: e.target.value })}
+                  />
+                </TFField>
+                <TFField
+                  label={
+                    <>
+                      Secret Access Key{' '}
+                      {form.id != null && (
+                        <span className="text-gray-400 font-normal">(leave blank to keep)</span>
+                      )}
+                    </>
+                  }
+                >
+                  <TFInput
+                    type="password"
+                    value={form.s3SecretAccessKey}
+                    onChange={(e) => setForm({ ...form, s3SecretAccessKey: e.target.value })}
+                  />
+                </TFField>
+                <TFField label="Prefix">
+                  <TFInput
+                    placeholder="e.g. timeforge/backups"
+                    value={form.s3Prefix}
+                    onChange={(e) => setForm({ ...form, s3Prefix: e.target.value })}
+                  />
+                </TFField>
+                <div className="flex items-center pt-6">
+                  <TFCheckbox
+                    id="path-style"
+                    label="Force path-style URLs (required for some non-AWS providers)"
+                    checked={form.s3PathStyle}
+                    onChange={(e) => setForm({ ...form, s3PathStyle: e.target.checked })}
+                  />
+                </div>
+              </div>
+            )}
+
+            {form.provider === 'nextcloud' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <TFField
+                  label="Server URL"
                   required
-                  className="border rounded p-2 w-full"
-                  placeholder="https://nextcloud.example.com"
-                  value={form.ncUrl}
-                  onChange={(e) => setForm({ ...form, ncUrl: e.target.value })}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Nextcloud root, or the full WebDAV URL from Files → Settings → "WebDAV" — both work.
-                </p>
+                  className="md:col-span-2"
+                  hint="Nextcloud root, or the full WebDAV URL from Files → Settings → &quot;WebDAV&quot; — both work."
+                >
+                  <TFInput
+                    required
+                    placeholder="https://nextcloud.example.com"
+                    value={form.ncUrl}
+                    onChange={(e) => setForm({ ...form, ncUrl: e.target.value })}
+                  />
+                </TFField>
+                <TFField label="Username" required>
+                  <TFInput
+                    required
+                    value={form.ncUser}
+                    onChange={(e) => setForm({ ...form, ncUser: e.target.value })}
+                  />
+                </TFField>
+                <TFField
+                  label={
+                    <>
+                      App Password{' '}
+                      {form.id != null && (
+                        <span className="text-gray-400 font-normal">(leave blank to keep)</span>
+                      )}
+                    </>
+                  }
+                >
+                  <TFInput
+                    type="password"
+                    value={form.ncPass}
+                    onChange={(e) => setForm({ ...form, ncPass: e.target.value })}
+                  />
+                </TFField>
+                <TFField label="Remote folder" className="md:col-span-2">
+                  <TFInput
+                    placeholder="Backups/timeforge"
+                    value={form.ncPath}
+                    onChange={(e) => setForm({ ...form, ncPath: e.target.value })}
+                  />
+                </TFField>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Username *</label>
-                <input
-                  required
-                  className="border rounded p-2 w-full"
-                  value={form.ncUser}
-                  onChange={(e) => setForm({ ...form, ncUser: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  App Password {form.id != null && <span className="text-gray-400 font-normal">(leave blank to keep)</span>}
-                </label>
-                <input
-                  type="password"
-                  className="border rounded p-2 w-full"
-                  value={form.ncPass}
-                  onChange={(e) => setForm({ ...form, ncPass: e.target.value })}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Remote folder</label>
-                <input
-                  className="border rounded p-2 w-full"
-                  placeholder="Backups/timeforge"
-                  value={form.ncPath}
-                  onChange={(e) => setForm({ ...form, ncPath: e.target.value })}
-                />
-              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <TFButton type="button" variant="outline" onClick={cancelForm}>
+                Cancel
+              </TFButton>
+              <TFButton type="submit" disabled={save.isPending}>
+                {save.isPending ? 'Saving…' : form.id == null ? 'Add Destination' : 'Save Changes'}
+              </TFButton>
             </div>
-          )}
+          </form>
+        )}
+      </TFCard>
+      {restoreSection}
 
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={cancelForm}
-              className="px-4 py-2 rounded text-sm border border-gray-300 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={save.isPending}
-              className="bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {save.isPending ? 'Saving…' : form.id == null ? 'Add Destination' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-      )}
-    </div>
-    {restoreSection}
+      <TFConfirm
+        open={confirmDeleteId !== null}
+        title="Delete destination?"
+        message={
+          deletingDest
+            ? `Delete backup destination "${deletingDest.name}"? Existing backups stored remotely are not affected.`
+            : 'Delete backup destination?'
+        }
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (confirmDeleteId !== null) remove.mutate(confirmDeleteId);
+          setConfirmDeleteId(null);
+        }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

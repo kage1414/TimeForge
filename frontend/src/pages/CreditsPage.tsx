@@ -3,7 +3,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { gql } from '../api/client';
 import { Credit, Client } from '../types';
-import ConfirmModal from '../components/ConfirmModal';
+import {
+  TFBadge,
+  TFButton,
+  TFCard,
+  TFConfirm,
+  TFEmpty,
+  TFInput,
+  TFLoading,
+  TFPageHeader,
+  TFSelect,
+  TFTable,
+  TFTBody,
+  TFTd,
+  TFTh,
+  TFTHead,
+  TFTr,
+} from '../components/tf';
 
 const CREDITS_QUERY = `
   query {
@@ -55,8 +71,7 @@ export default function CreditsPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: number) =>
-      gql(`mutation($id: Int!) { deleteCredit(id: $id) }`, { id }),
+    mutationFn: (id: number) => gql(`mutation($id: Int!) { deleteCredit(id: $id) }`, { id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['credits'] });
       toast.success('Credit deleted');
@@ -65,89 +80,115 @@ export default function CreditsPage() {
 
   return (
     <div>
-      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-        <h1 className="text-2xl font-bold">Credits</h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-        >
-          {showForm ? 'Cancel' : 'Add Credit'}
-        </button>
-      </div>
+      <TFPageHeader
+        title="Credits"
+        actions={
+          <TFButton onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : 'Add Credit'}
+          </TFButton>
+        }
+      />
 
       {showForm && (
-        <form
-          onSubmit={(e) => { e.preventDefault(); create.mutate(); }}
-          className="bg-white rounded-lg shadow p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4"
-        >
-          <select className="border rounded p-2" required value={clientId} onChange={(e) => setClientId(e.target.value)}>
-            <option value="">Select Client *</option>
-            {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.company}</option>)}
-          </select>
-          <input className="border rounded p-2" placeholder="Amount *" type="number" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <input className="border rounded p-2" placeholder="Description *" required value={description} onChange={(e) => setDescription(e.target.value)} />
-          <div className="md:col-span-3">
-            <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Create Credit</button>
-          </div>
-        </form>
+        <TFCard className="mb-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              create.mutate();
+            }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-4"
+          >
+            <TFSelect required value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <option value="">Select Client *</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name || c.company}
+                </option>
+              ))}
+            </TFSelect>
+            <TFInput
+              placeholder="Amount *"
+              type="number"
+              step="0.01"
+              required
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+            <TFInput
+              placeholder="Description *"
+              required
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <div className="md:col-span-3">
+              <TFButton type="submit">Create Credit</TFButton>
+            </div>
+          </form>
+        </TFCard>
       )}
 
       <p className="text-sm text-gray-500 mb-4">
-        Credits represent prepayments or adjustments. Available credits are automatically applied when creating an invoice.
+        Credits represent prepayments or adjustments. Available credits are automatically applied
+        when creating an invoice.
       </p>
 
       {isLoading ? (
-        <p className="text-center py-12">Loading...</p>
+        <TFLoading />
       ) : credits.length === 0 ? (
-        <p className="text-gray-500 text-center py-12">No credits yet.</p>
+        <TFEmpty>No credits yet.</TFEmpty>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3">Client</th>
-                <th className="text-left p-3">Description</th>
-                <th className="text-right p-3">Original</th>
-                <th className="text-right p-3">Remaining</th>
-                <th className="text-left p-3">Status</th>
-                <th className="text-left p-3">Created</th>
-                <th className="text-right p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <TFCard padding="none" className="overflow-hidden">
+          <TFTable>
+            <TFTHead>
+              <TFTr>
+                <TFTh>Client</TFTh>
+                <TFTh>Description</TFTh>
+                <TFTh className="text-right">Original</TFTh>
+                <TFTh className="text-right">Remaining</TFTh>
+                <TFTh>Status</TFTh>
+                <TFTh>Created</TFTh>
+                <TFTh className="text-right">Actions</TFTh>
+              </TFTr>
+            </TFTHead>
+            <TFTBody>
               {credits.map((c) => (
-                <tr key={c.id} className="border-t hover:bg-gray-50">
-                  <td className="p-3 font-medium">{c.client_name}</td>
-                  <td className="p-3">{c.description}</td>
-                  <td className="p-3 text-right">${Number(c.amount).toFixed(2)}</td>
-                  <td className="p-3 text-right">${Number(c.remaining_amount).toFixed(2)}</td>
-                  <td className="p-3">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      Number(c.remaining_amount) > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                    }`}>
+                <TFTr key={c.id}>
+                  <TFTd className="font-medium">{c.client_name}</TFTd>
+                  <TFTd>{c.description}</TFTd>
+                  <TFTd className="text-right">${Number(c.amount).toFixed(2)}</TFTd>
+                  <TFTd className="text-right">${Number(c.remaining_amount).toFixed(2)}</TFTd>
+                  <TFTd>
+                    <TFBadge tone={Number(c.remaining_amount) > 0 ? 'success' : 'neutral'}>
                       {Number(c.remaining_amount) > 0 ? 'Available' : 'Used'}
-                    </span>
-                  </td>
-                  <td className="p-3">{new Date(c.created_at).toLocaleDateString()}</td>
-                  <td className="p-3 text-right">
+                    </TFBadge>
+                  </TFTd>
+                  <TFTd>{new Date(c.created_at).toLocaleDateString()}</TFTd>
+                  <TFTd className="text-right">
                     {Number(c.remaining_amount) > 0 && (
-                      <button onClick={() => setConfirmDeleteId(c.id)} className="text-red-600 hover:underline text-sm">Delete</button>
+                      <TFButton
+                        variant="linkDanger"
+                        size="sm"
+                        onClick={() => setConfirmDeleteId(c.id)}
+                      >
+                        Delete
+                      </TFButton>
                     )}
-                  </td>
-                </tr>
+                  </TFTd>
+                </TFTr>
               ))}
-            </tbody>
-          </table>
-          </div>
-        </div>
+            </TFTBody>
+          </TFTable>
+        </TFCard>
       )}
 
-      <ConfirmModal
+      <TFConfirm
         open={confirmDeleteId !== null}
         message="Delete this credit?"
         confirmLabel="Delete"
-        onConfirm={() => { if (confirmDeleteId !== null) remove.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
+        onConfirm={() => {
+          if (confirmDeleteId !== null) remove.mutate(confirmDeleteId);
+          setConfirmDeleteId(null);
+        }}
         onCancel={() => setConfirmDeleteId(null)}
       />
     </div>
