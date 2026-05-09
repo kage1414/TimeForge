@@ -3,11 +3,14 @@ services:
     image: ${DOCKERHUB_USERNAME:-kage1414}/timeforge:latest
     environment:
       DATABASE_PATH: /data/db.sqlite
+      EXPORT_DIR: /data/exports
       PORT: "4000"
     ports:
       - "3000:4000"
     volumes:
       - dbdata:/data
+      - exportsdata:/data/exports
 
 volumes:
   dbdata:
+  exportsdata:

@@ -14,6 +14,7 @@ const INVOICE_QUERY = `
       id client_id client_name client_company client_email client_address1 client_address2 client_city client_state client_zip
       invoice_number status payment_method issue_date due_date
       subtotal tax_rate tax_amount total notes
+      export_status export_error export_generated_at
       line_items { id description quantity rate amount time_entry_id }
       created_at updated_at
     }
@@ -40,10 +41,12 @@ function SplitDropdown({
   label,
   buttonClass,
   items,
+  disabled,
 }: {
   label: string;
   buttonClass: string;
   items: { label: string; onClick: () => void }[];
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -58,14 +61,15 @@ function SplitDropdown({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-1 px-3 py-2 rounded text-sm ${buttonClass}`}
+        disabled={disabled}
+        className={`flex items-center gap-1 px-3 py-2 rounded text-sm ${buttonClass} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
       >
         {label}
         <svg className="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && (
+      {open && !disabled && (
         <div className="absolute right-0 mt-1 bg-white border rounded-md shadow-lg z-50 min-w-[140px] py-1">
           {items.map((item) => (
             <button
@@ -158,6 +162,55 @@ export default function InvoiceDetailPage() {
     queryFn: async () =>
       (await gql<{ invoice: Invoice }>(INVOICE_QUERY, { id: Number(id) }))
         .invoice,
+    refetchInterval: (q) => {
+      const inv = q.state.data as Invoice | undefined;
+      if (inv && (inv.export_status === "pending" || inv.export_status === "generating")) {
+        return 2000;
+      }
+      return false;
+    },
+  });
+
+  const exportReady = invoice?.export_status === "ready";
+  const exportBusy =
+    invoice?.export_status === "pending" || invoice?.export_status === "generating";
+
+  async function downloadExport(kind: "pdf" | "csv") {
+    if (!invoice) return;
+    const token = localStorage.getItem("auth_token");
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/export.${kind}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed to download ${kind.toUpperCase()}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Invoice-${invoice.invoice_number}.${kind}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast.error(err.message || `Failed to download ${kind.toUpperCase()}`);
+    }
+  }
+
+  const regenerateExports = useMutation({
+    mutationFn: () =>
+      gql(
+        `mutation($id: Int!) { regenerateInvoiceExports(id: $id) { id export_status } }`,
+        { id: Number(id) },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invoice", id] });
+      toast.success("Regenerating invoice export...");
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const { data: settings } = useQuery<UserSettings>({
@@ -190,13 +243,9 @@ export default function InvoiceDetailPage() {
       body: string;
       attachPdf: boolean;
     }) => {
-      let pdfBase64: string | null = null;
-      if (attachPdf && invoice && settings) {
-        pdfBase64 = await generatePdfBase64();
-      }
       return gql(
-        `mutation($id: Int!, $to: String!, $body: String, $pdfBase64: String) { sendInvoice(id: $id, to: $to, body: $body, pdfBase64: $pdfBase64) }`,
-        { id: Number(id), to, body: body || null, pdfBase64 },
+        `mutation($id: Int!, $to: String!, $body: String, $attachPdf: Boolean) { sendInvoice(id: $id, to: $to, body: $body, attachPdf: $attachPdf) }`,
+        { id: Number(id), to, body: body || null, attachPdf },
       );
     },
     onSuccess: () => {
@@ -218,215 +267,8 @@ export default function InvoiceDetailPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  function buildInvoiceHtml() {
-    if (!invoice) return "";
-    const lineRows = (invoice.line_items || [])
-      .map((li) => {
-        const isCredit = Number(li.amount) < 0;
-        const colorStyle = isCredit ? "color:#16a34a" : "";
-        return `<tr${isCredit ? ' style="color:#16a34a"' : ""}>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;${colorStyle}">${(() => {
-          const [first, ...rest] = li.description.split("\n");
-          const dashIdx = first.indexOf(" - ");
-          const name = dashIdx >= 0 ? first.slice(0, dashIdx) : first;
-          const date = dashIdx >= 0 ? first.slice(dashIdx) : "";
-          return `<strong>${name}</strong>${date}${rest.length ? "<br><em>" + rest.join("<br>") + "</em>" : ""}`;
-        })()}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${li.quantity == null ? "" : Number(li.quantity).toFixed(2)}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${li.rate == null ? "" : isCredit ? `-$${Math.abs(Number(li.rate)).toFixed(2)}` : `$${Number(li.rate).toFixed(2)}`}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;${colorStyle}">${isCredit ? `-$${Math.abs(Number(li.amount)).toFixed(2)}` : `$${Number(li.amount).toFixed(2)}`}</td>
-      </tr>`;
-      })
-      .join("");
-
-    let totalsHtml = `
-      <tr><td colspan="3" style="padding:8px;text-align:right;color:#6b7280">Subtotal</td>
-        <td style="padding:8px;text-align:right">$${Number(invoice.subtotal).toFixed(2)}</td></tr>`;
-    if (Number(invoice.tax_rate) > 0) {
-      totalsHtml += `<tr><td colspan="3" style="padding:8px;text-align:right;color:#6b7280">Tax (${Number(invoice.tax_rate)}%)</td>
-        <td style="padding:8px;text-align:right">$${Number(invoice.tax_amount).toFixed(2)}</td></tr>`;
-    }
-    totalsHtml += `<tr style="border-top:2px solid #111"><td colspan="3" style="padding:8px;text-align:right;font-weight:bold">Total:</td>
-      <td style="padding:8px;text-align:right;font-weight:bold">$${Number(invoice.total).toFixed(2)}</td></tr>`;
-    totalsHtml += `<tr><td colspan="3" style="padding:8px;text-align:right;font-weight:700;font-size:1.1em">Amount Due (USD):</td>
-      <td style="padding:8px;text-align:right;font-weight:700;font-size:1.1em">$${Number(invoice.total).toFixed(2)}</td></tr>`;
-
-    const fullName = settings
-      ? [settings.first_name, settings.last_name].filter(Boolean).join(" ")
-      : "";
-    const cityStateZip = settings
-      ? [settings.city, settings.state].filter(Boolean).join(", ") +
-        (settings.zip ? ` ${settings.zip}` : "")
-      : "";
-    const paymentLines = [
-      settings?.venmo ? `Venmo: ${settings.venmo}` : "",
-      settings?.cashapp ? `Cash App: ${settings.cashapp}` : "",
-      settings?.paypal ? `PayPal: ${settings.paypal}` : "",
-      settings?.zelle ? `Zelle: ${settings.zelle}` : "",
-    ].filter(Boolean);
-
-    return `<!DOCTYPE html><html><head><title>Invoice ${invoice.invoice_number}</title>
-      <style>@media print { body { margin: 20px; } }</style></head>
-      <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:40px;color:#111;font-size:14px">
-
-      <!-- Header: user info right-aligned, INVOICE title -->
-      <div style="text-align:right;margin-bottom:32px">
-        <h1 style="margin:0;font-size:36px;text-transform:uppercase;letter-spacing:2px">INVOICE</h1>
-        ${paymentLines.length ? `<div style="margin:4px 0 16px;color:#6b7280;font-size:13px">${paymentLines.map((l) => `<p style="margin:2px 0">${l}</p>`).join("")}</div>` : '<div style="margin-bottom:16px"></div>'}
-        ${settings?.company ? `<p style="margin:2px 0;font-weight:700;font-size:16px">${settings.company}</p>` : ""}
-        ${fullName ? `<p style="margin:2px 0;font-weight:600">${fullName}</p>` : ""}
-        ${settings?.address1 ? `<p style="margin:2px 0">${settings.address1}</p>` : ""}
-        ${settings?.address2 ? `<p style="margin:2px 0">${settings.address2}</p>` : ""}
-        ${cityStateZip ? `<p style="margin:2px 0">${cityStateZip}</p>` : ""}
-        ${settings?.phone ? `<p style="margin:8px 0 0;color:#6b7280">${settings.phone}</p>` : ""}
-        ${settings?.email ? `<p style="margin:2px 0;color:#6b7280">${settings.email}</p>` : ""}
-      </div>
-
-      <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px" />
-
-      <!-- Bill To + Invoice Details side by side -->
-      <div style="display:flex;justify-content:space-between;margin-bottom:32px">
-        <div>
-          <p style="margin:0 0 4px;color:#6b7280;font-size:12px;text-transform:uppercase;letter-spacing:1px">Bill To</p>
-          ${invoice.client_company ? `<p style="margin:2px 0;font-weight:700">${invoice.client_company}</p>` : ""}
-          ${invoice.client_name && invoice.client_name !== invoice.client_company ? `<p style="margin:2px 0;font-weight:${invoice.client_company ? "500" : "600"}">${invoice.client_name}</p>` : ""}
-          ${invoice.client_address1 ? `<p style="margin:2px 0">${invoice.client_address1}</p>` : ""}
-          ${invoice.client_address2 ? `<p style="margin:2px 0">${invoice.client_address2}</p>` : ""}
-          ${invoice.client_city || invoice.client_state || invoice.client_zip ? `<p style="margin:2px 0">${[invoice.client_city, invoice.client_state].filter(Boolean).join(", ")}${invoice.client_zip ? ` ${invoice.client_zip}` : ""}</p>` : ""}
-          ${invoice.client_email ? `<p style="margin:6px 0 0;color:#6b7280">${invoice.client_email}</p>` : ""}
-        </div>
-        <div style="text-align:right">
-          <table style="margin-left:auto;border-collapse:collapse">
-            <tr><td style="padding:4px 12px;font-size:14px;color:#6b7280;text-align:right">Invoice Number:</td><td style="padding:4px 12px;font-size:14px;text-align:right;font-weight:500">${invoice.invoice_number}</td></tr>
-            <tr><td style="padding:4px 12px;font-size:14px;color:#6b7280;text-align:right">Invoice Date:</td><td style="padding:4px 12px;font-size:14px;text-align:right">${new Date(invoice.issue_date).toLocaleDateString()}</td></tr>
-            <tr><td style="padding:4px 12px;font-size:14px;color:#6b7280;text-align:right">Payment Due:</td><td style="padding:4px 12px;font-size:14px;text-align:right">${new Date(invoice.issue_date).toDateString() === new Date(invoice.due_date).toDateString() ? "Upon Receipt" : new Date(invoice.due_date).toLocaleDateString()}</td></tr>
-            <tr style="font-weight:600"><td style="padding:4px 12px;font-size:14px;padding-top:8px;text-align:right">Amount Due (USD):</td><td style="padding:4px 12px;font-size:14px;padding-top:8px;text-align:right">$${Number(invoice.total).toFixed(2)}</td></tr>
-          </table>
-        </div>
-      </div>
-
-      <!-- Line Items -->
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr>
-          <th style="text-align:left;padding:10px 8px;border-top:2px solid #111;border-bottom:2px solid #111;font-size:13px;color:#111">Services</th><th style="text-align:right;padding:10px 8px;border-top:2px solid #111;border-bottom:2px solid #111;font-size:13px;color:#111">Hours</th>
-          <th style="text-align:right;padding:10px 8px;border-top:2px solid #111;border-bottom:2px solid #111;font-size:13px;color:#111">Rate</th><th style="text-align:right;padding:10px 8px;border-top:2px solid #111;border-bottom:2px solid #111;font-size:13px;color:#111">Amount</th>
-        </tr></thead>
-        <tbody>${lineRows}</tbody>
-        <tfoot>${totalsHtml}</tfoot>
-      </table>
-
-      ${invoice.notes ? `<div style="margin-top:32px"><p style="font-weight:600;margin-bottom:4px;color:#6b7280">Notes</p><p style="color:#374151;white-space:pre-wrap">${invoice.notes}</p></div>` : ""}
-    </body></html>`;
-  }
-
-  function exportPdf() {
-    const html = buildInvoiceHtml();
-    if (!html) return;
-    const w = window.open("", "_blank");
-    if (!w) return;
-    w.document.write(html);
-    w.document.close();
-    w.print();
-  }
-
-  async function generatePdfBase64(): Promise<string> {
-    const { default: html2canvas } = await import("html2canvas");
-    const { jsPDF } = await import("jspdf");
-    const html = buildInvoiceHtml();
-    const bodyContent = html.replace(/[\s\S]*<body[^>]*>/i, "").replace(/<\/body>[\s\S]*/i, "");
-    const container = document.createElement("div");
-    container.innerHTML = bodyContent;
-    container.style.cssText =
-      'font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:40px;color:#111;font-size:14px;position:absolute;left:-9999px;width:800px;';
-    document.body.appendChild(container);
-    try {
-      const canvas = await html2canvas(container, { scale: 2, useCORS: true, logging: false });
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({
-        unit: "mm",
-        format: "a4",
-        orientation: "portrait",
-      });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const imgWidth = pageWidth - margin * 2;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let y = margin;
-      const usableHeight = pageHeight - margin * 2;
-      if (imgHeight <= usableHeight) {
-        pdf.addImage(imgData, "PNG", margin, y, imgWidth, imgHeight);
-      } else {
-        // Multi-page: slice the canvas into page-sized chunks
-        let srcY = 0;
-        const srcPageHeight = (canvas.width * usableHeight) / imgWidth;
-        while (srcY < canvas.height - 1) {
-          const sliceHeight = Math.min(srcPageHeight, canvas.height - srcY);
-          if (sliceHeight < 2) break;
-          const pageCanvas = document.createElement("canvas");
-          pageCanvas.width = canvas.width;
-          pageCanvas.height = sliceHeight;
-          const ctx = pageCanvas.getContext("2d")!;
-          ctx.drawImage(
-            canvas,
-            0,
-            srcY,
-            canvas.width,
-            sliceHeight,
-            0,
-            0,
-            canvas.width,
-            sliceHeight,
-          );
-          const pageImg = pageCanvas.toDataURL("image/png");
-          const drawHeight = (sliceHeight * imgWidth) / canvas.width;
-          pdf.addImage(pageImg, "PNG", margin, margin, imgWidth, drawHeight);
-          srcY += sliceHeight;
-          if (srcY < canvas.height) pdf.addPage();
-        }
-      }
-      const arrayBuf = pdf.output("arraybuffer");
-      const bytes = new Uint8Array(arrayBuf);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++)
-        binary += String.fromCharCode(bytes[i]);
-      return btoa(binary);
-    } finally {
-      document.body.removeChild(container);
-    }
-  }
-
-  function exportCsv() {
-    if (!invoice) return;
-    const rows = [["Description", "Quantity (hrs)", "Rate", "Amount"]];
-    (invoice.line_items || []).forEach((li) => {
-      rows.push([
-        `"${li.description.replace(/"/g, '""')}"`,
-        li.quantity == null ? "" : Number(li.quantity).toFixed(2),
-        li.rate == null ? "" : Number(li.rate).toFixed(2),
-        Number(li.amount).toFixed(2),
-      ]);
-    });
-    rows.push([]);
-    rows.push(["Subtotal", "", "", Number(invoice.subtotal).toFixed(2)]);
-    if (Number(invoice.tax_rate) > 0) {
-      rows.push([
-        `Tax (${Number(invoice.tax_rate)}%)`,
-        "",
-        "",
-        Number(invoice.tax_amount).toFixed(2),
-      ]);
-    }
-    rows.push(["Total", "", "", Number(invoice.total).toFixed(2)]);
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${invoice.invoice_number}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const exportPdf = () => downloadExport("pdf");
+  const exportCsv = () => downloadExport("csv");
 
   if (isLoading) return <div className="text-center py-12">Loading...</div>;
   if (!invoice)
@@ -451,6 +293,8 @@ export default function InvoiceDetailPage() {
         <div className="flex gap-2">
           {settings?.smtp_host && settings?.smtp_user && (
             <button
+              disabled={!exportReady}
+              title={exportBusy ? "Generating export..." : invoice.export_status === "failed" ? `Export failed: ${invoice.export_error || "unknown error"}` : undefined}
               onClick={() => {
                 setSendTo(invoice.client_email || "");
                 const name = settings?.first_name
@@ -477,19 +321,34 @@ export default function InvoiceDetailPage() {
                 }
                 setShowSendModal(true);
               }}
-              className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700"
+              className="bg-green-600 text-white px-3 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Send Email
             </button>
           )}
           <SplitDropdown
-            label="Export"
+            label={
+              exportBusy
+                ? "Generating..."
+                : invoice.export_status === "failed"
+                ? "Export Failed"
+                : "Export"
+            }
             buttonClass="bg-gray-600 text-white hover:bg-gray-700"
+            disabled={!exportReady}
             items={[
               { label: "Export PDF", onClick: exportPdf },
               { label: "Export CSV", onClick: exportCsv },
             ]}
           />
+          {invoice.export_status === "failed" && (
+            <button
+              onClick={() => regenerateExports.mutate()}
+              className="bg-amber-600 text-white px-3 py-2 rounded text-sm hover:bg-amber-700"
+            >
+              Retry
+            </button>
+          )}
           {nextStatuses.length > 0 && (
             <SplitDropdown
               label="Mark"
@@ -786,13 +645,15 @@ export default function InvoiceDetailPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={sendInvoice.isPending}
+                  disabled={sendInvoice.isPending || (attachPdf && !exportReady)}
                   className="bg-green-600 text-white px-4 py-2 text-sm rounded hover:bg-green-700 disabled:opacity-50"
                 >
                   {sendInvoice.isPending
-                    ? attachPdf
-                      ? "Generating PDF & Sending..."
-                      : "Sending..."
+                    ? "Sending..."
+                    : attachPdf && !exportReady
+                    ? exportBusy
+                      ? "Generating export..."
+                      : "Export not ready"
                     : "Send"}
                 </button>
               </div>

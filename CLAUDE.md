@@ -81,7 +81,7 @@ Full-stack invoicing and time-tracking application.
 - **clients**: id, name, email, address1, address2, city, state, phone
 - **projects**: id, client_id, name, description, default_rate, is_active
 - **time_entries**: id, project_id, description, start_time, end_time, duration_minutes, is_billable, invoice_id, rate_override, flat_amount (when non-null, the entry is a flat-amount item; start_time/end_time are an optional date range — stored as ISO at UTC midnight, formatted with `timeZone: 'UTC'` to avoid off-by-one in local time. Flat entries are excluded from running-timer queries and UI filters, and `duration_minutes` is forced to 0 for flat entries — never derive hours/amount from duration × rate for flat rows; always use `flat_amount` directly)
-- **invoices**: id, client_id, invoice_number, status (draft/sent/paid/overdue/cancelled), issue_date, due_date, subtotal, tax_rate, tax_amount, credits_applied, total, notes
+- **invoices**: id, client_id, invoice_number, status (draft/sent/paid/overdue/cancelled), issue_date, due_date, subtotal, tax_rate, tax_amount, credits_applied, total, notes, `export_status` ('pending' | 'generating' | 'ready' | 'failed'), `export_error`, `export_generated_at`
 - **invoice_line_items**: id, invoice_id, description, quantity, rate, amount, time_entry_id
 - **credits**: id, client_id, amount, remaining_amount, description, source_invoice_id, applied_invoice_id
 - **user_settings**: id (single row, id=1), first_name, last_name, email, address1, address2, city, state, phone, venmo, cashapp, paypal, zelle, show_earnings_on_timer, resume_window_minutes (default 60), consolidate_hours (default false — when true, invoice creation merges same-day time entries per project+rate into one line item)
@@ -131,7 +131,17 @@ Single endpoint at `/graphql` (Apollo Server).
 - `createCredit`, `deleteCredit`
 - `updateUserSettings(input)` - Update user profile and payment methods
 
+## Invoice Export Pipeline
+
+- On `createInvoice` (and on `unbillTimeEntry` since line items change), the backend marks `invoices.export_status='pending'` and fires off a background generation in `backend/src/exports/generator.ts`. The generator builds invoice HTML server-side (`exports/html.ts`, mirrors the look of the on-screen render — never let client and server templates drift), writes a CSV, then renders the HTML to PDF with a long-lived `puppeteer` browser singleton (system `chromium` via `PUPPETEER_EXECUTABLE_PATH`, alpine packages installed in both Dockerfiles). Files are stored at `${EXPORT_DIR}/<user_id>/<client_id>/invoice-<invoice_id>.{pdf,csv}` and `EXPORT_DIR` defaults to `/data/exports` in containers (mounted via the `exportsdata` volume in `docker-compose.yml`).
+- Generations are deduped per-invoice via an in-memory `inFlight` Map; on server restart `resetStaleGeneratingStatus` flips any leftover `generating` rows back to `pending`. Legacy invoices with `export_status='pending'` are kicked off lazily when `Query.invoice` is fetched. `deleteInvoice` deletes both export files.
+- `Query.invoice` exposes `export_status`/`export_error`/`export_generated_at`; the frontend polls (`refetchInterval` 2s while pending/generating) and disables Export PDF / Export CSV / Send Email until status is `ready`. A `regenerateInvoiceExports(id)` mutation is the manual retry path (used by a "Retry" button when status is `failed`).
+- Export downloads come from `GET /api/invoices/:id/export.pdf` and `.csv` (auth via `Authorization: Bearer` header or `?token=` query param). The route awaits `ensureExportsReady` so a missing file triggers regeneration synchronously. `sendInvoice(attachPdf: Boolean)` reads the on-disk PDF directly — no more base64 round-trip from the browser, and it errors if `export_status !== 'ready'`.
+
 ## Environment Variables
 
 - `DATABASE_URL` - PostgreSQL connection string (default: postgresql://postgres:postgres@db:5432/invoicer)
+- `DATABASE_PATH` - SQLite path (containers default to `/data/db.sqlite`)
+- `EXPORT_DIR` - Where invoice export PDFs/CSVs are written (containers default to `/data/exports`)
+- `PUPPETEER_EXECUTABLE_PATH` - Chromium binary path used by puppeteer (`/usr/bin/chromium-browser` in the alpine images)
 - `PORT` - Backend port (default: 4000)

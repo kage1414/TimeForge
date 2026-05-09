@@ -1,5 +1,6 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import path from 'path';
@@ -8,6 +9,11 @@ import { expressMiddleware } from '@apollo/server/express4';
 import db from './db';
 import { typeDefs } from './graphql/schema';
 import { resolvers } from './graphql/resolvers';
+import {
+  ensureExportsReady,
+  resetStaleGeneratingStatus,
+} from './exports/generator';
+import { invoiceCsvPath, invoicePdfPath } from './exports/paths';
 
 export const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
@@ -23,6 +29,76 @@ app.use(express.json({ limit: '50mb' }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+async function authenticateUser(req: Request): Promise<{ id: number } | null> {
+  const headerToken = req.headers.authorization?.replace('Bearer ', '');
+  const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined;
+  const token = headerToken || queryToken;
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
+    const user = await db('users').where('id', decoded.userId).select('id').first();
+    return user || null;
+  } catch {
+    return null;
+  }
+}
+
+async function requireUser(req: Request, res: Response, next: NextFunction) {
+  const user = await authenticateUser(req);
+  if (!user) {
+    res.status(401).json({ error: 'Not authenticated' });
+    return;
+  }
+  (req as any).userId = user.id;
+  next();
+}
+
+async function serveInvoiceExport(kind: 'pdf' | 'csv', req: Request, res: Response) {
+  const userId = (req as any).userId as number;
+  const invoiceId = Number(req.params.id);
+  if (!Number.isFinite(invoiceId)) {
+    res.status(400).json({ error: 'Invalid invoice id' });
+    return;
+  }
+  const invoice = await db('invoices').where({ id: invoiceId, user_id: userId }).first();
+  if (!invoice) {
+    res.status(404).json({ error: 'Invoice not found' });
+    return;
+  }
+  await ensureExportsReady(invoiceId);
+  const fresh = await db('invoices').where('id', invoiceId).first();
+  if (fresh.export_status !== 'ready') {
+    res.status(409).json({ error: 'Export is still being generated', status: fresh.export_status });
+    return;
+  }
+  const filePath =
+    kind === 'pdf'
+      ? invoicePdfPath(invoice.user_id, invoice.client_id, invoiceId)
+      : invoiceCsvPath(invoice.user_id, invoice.client_id, invoiceId);
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: 'Export file missing' });
+    return;
+  }
+  const filename = `Invoice-${invoice.invoice_number}.${kind}`;
+  res.setHeader('Content-Type', kind === 'pdf' ? 'application/pdf' : 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  fs.createReadStream(filePath).pipe(res);
+}
+
+app.get('/api/invoices/:id/export.pdf', requireUser, (req, res) => {
+  serveInvoiceExport('pdf', req, res).catch((err) => {
+    console.error('export pdf error:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to serve PDF' });
+  });
+});
+
+app.get('/api/invoices/:id/export.csv', requireUser, (req, res) => {
+  serveInvoiceExport('csv', req, res).catch((err) => {
+    console.error('export csv error:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Failed to serve CSV' });
+  });
 });
 
 async function seedAdmin() {
@@ -61,6 +137,7 @@ async function start() {
     await db.migrate.latest();
     console.log('Migrations complete');
 
+    await resetStaleGeneratingStatus();
     await seedAdmin();
 
     const server = new ApolloServer({ typeDefs, resolvers });

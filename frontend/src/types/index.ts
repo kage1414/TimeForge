@@ -68,6 +68,9 @@ export interface Invoice {
   notes: string;
   payment_method?: string | null;
   consolidate_hours?: boolean;
+  export_status: 'pending' | 'generating' | 'ready' | 'failed';
+  export_error?: string | null;
+  export_generated_at?: string | null;
   line_items?: LineItem[];
   credits?: Credit[];
   created_at: string;
