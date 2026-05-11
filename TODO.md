@@ -4,18 +4,11 @@
 
 ## 🧠 Backlog
 
-- [] Allow customer email bodies on a per-client basis. This should be configurable on the clients page
-- [] When sending invoice email, include option to cc the user
-- [] Split up settings pages
-- [] Is postgres doing anything? If not, remove it.
-- [] Convert to an ORM that doesn't require migrations
-- [] Configure optional s3 storage for invoice pdfs and csv's. If not set, invoices should be stored on disk
-- [] Allow backups on a schedule, daily, every 3 days, every week, every month, every year, and a custom cron field. This should be a background task
-- [] Optionally allow deletion of backups after specific amount of time
-  - [] The default check to delete backups should be once per day, with the option of letting the user set their own cron schedule. This should be a background task
+- [] Convert to an ORM that doesn't require migrations (deferred — large architectural change, needs design discussion before starting)
 
 ## ✅ Done
 
+- [x] Per-client default email template (`clients.default_email_template` via migration `20260510000001_add_client_email_template`). Surfaces as a textarea in the ClientsPage edit modal; InvoiceDetailPage's send-modal templating prefers `invoice.client_default_email_template` over `settings.default_email_template`.
 - [x] Build a TF component library (`frontend/src/components/tf/`) on shadcn-style primitives: `class-variance-authority` for variants/colors, `clsx`+`tailwind-merge` via `cn()`, Radix UI for Dialog / DropdownMenu / Slot. Components: `TFButton`, `TFInput`, `TFTextarea`, `TFSelect`, `TFLabel`, `TFField`, `TFCheckbox`, `TFCard`/`TFCardTitle`, `TFBadge`, `TFTable`/`TFTHead`/`TFTBody`/`TFTr`/`TFTh`/`TFTd`, `TFDialog` (+ `TFConfirm` shim that the old `ConfirmModal` now re-exports), `TFDropdownMenu` (+ `TFButtonMenu` convenience that replaced the hand-rolled `SplitDropdown` on InvoiceDetailPage), `TFLink`, `TFSpinner`/`TFLoading`, `TFEmpty`, `TFPageHeader`. Variants: 10× `tfButtonVariants`, 7× `tfBadgeVariants`, plus `size` axes. Reusability rule enforced: TF components import nothing from the app (no `react-router-dom`, no GraphQL/types) — `TFButton`/`TFLink` use Radix `asChild` for slot composition, and TimeForge-specific status→tone mapping lives in `frontend/src/lib/statusTone.ts` outside the library. All 13 pages + `BackupSettings` rewritten against the library; CLAUDE.md updated to require TF before raw markup.
 - [x] Restore from backup destination in Settings → Backups: dropdowns to pick destination → pick backup, listed with human-readable dates parsed from the filename + last-modified from S3/Nextcloud. `backupDestinationFiles(id)` query lists `timeforge-backup-*.json.gz` via S3 ListObjectsV2 / Nextcloud PROPFIND; `restoreBackup(destinationId, filename)` mutation downloads, gunzips, validates schema_version, then destructive-replaces all of the current user's rows in a transaction (clients, projects, invoices, line items, time entries, credits, user_settings) — preserving original IDs, remapping `user_id` to the logged-in user, bumping `sqlite_sequence`, and resetting invoice `export_status` so PDFs/CSVs regenerate. Confirm modal warns about destruction. Filename pattern is enforced server-side so clients can't coerce arbitrary GETs.
 - [x] Background-generate invoice PDF + CSV on `createInvoice`/`unbillTimeEntry`, store at `${EXPORT_DIR}/<user_id>/<client_id>/invoice-<id>.{pdf,csv}` (default `/data/exports`, separate `exportsdata` docker volume). New `invoices.export_status` ('pending'|'generating'|'ready'|'failed') tracked via migration `20260509000001_add_invoice_export_status`. Express routes `/api/invoices/:id/export.{pdf,csv}` (Bearer/`?token=`) stream the cached files; `sendInvoice` now reads the on-disk PDF instead of accepting `pdfBase64`. Frontend polls `export_status` and disables Export PDF / Export CSV / Send Email until ready, with a Retry button on failure. Removed in-browser `html2canvas`/`jspdf` rendering. Dockerfiles install alpine `chromium` for puppeteer.

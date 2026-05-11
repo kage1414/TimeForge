@@ -212,7 +212,7 @@ export const resolvers = {
       const user = requireAuth(context);
       const invoice = await db('invoices')
         .join('clients', 'invoices.client_id', 'clients.id')
-        .select('invoices.*', db.raw('COALESCE(clients.name, clients.company) as client_name'), 'clients.company as client_company', 'clients.email as client_email', 'clients.address1 as client_address1', 'clients.address2 as client_address2', 'clients.city as client_city', 'clients.state as client_state', 'clients.zip as client_zip')
+        .select('invoices.*', db.raw('COALESCE(clients.name, clients.company) as client_name'), 'clients.company as client_company', 'clients.email as client_email', 'clients.address1 as client_address1', 'clients.address2 as client_address2', 'clients.city as client_city', 'clients.state as client_state', 'clients.zip as client_zip', 'clients.default_email_template as client_default_email_template')
         .where('invoices.id', id)
         .where('invoices.user_id', user.id)
         .first();

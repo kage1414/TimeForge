@@ -10,6 +10,7 @@ export const typeDefs = `#graphql
     state: String
     zip: String
     phone: String
+    default_email_template: String
     is_active: Boolean!
     created_at: String!
     updated_at: String!
@@ -79,6 +80,7 @@ export const typeDefs = `#graphql
     client_city: String
     client_state: String
     client_zip: String
+    client_default_email_template: String
     invoice_number: String!
     status: String!
     issue_date: String!
@@ -315,6 +317,7 @@ export const typeDefs = `#graphql
     state: String
     zip: String
     phone: String
+    default_email_template: String
   }
 
   input UpdateClientInput {
@@ -327,6 +330,7 @@ export const typeDefs = `#graphql
     state: String
     zip: String
     phone: String
+    default_email_template: String
     is_active: Boolean
   }
 

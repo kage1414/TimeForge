@@ -35,6 +35,7 @@ const INVOICE_QUERY = `
   query($id: Int!) {
     invoice(id: $id) {
       id client_id client_name client_company client_email client_address1 client_address2 client_city client_state client_zip
+      client_default_email_template
       invoice_number status payment_method issue_date due_date
       subtotal tax_rate tax_amount total notes
       export_status export_error export_generated_at
@@ -233,9 +234,10 @@ export default function InvoiceDetailPage() {
       new Date(invoice!.issue_date).toDateString() === new Date(invoice!.due_date).toDateString()
         ? 'upon receipt'
         : 'by ' + new Date(invoice!.due_date).toLocaleDateString();
-    if (settings?.default_email_template) {
+    const template = invoice!.client_default_email_template || settings?.default_email_template;
+    if (template) {
       setSendBody(
-        settings.default_email_template
+        template
           .replace(/\{\{client_name\}\}/g, invoice!.client_name)
           .replace(/\{\{invoice_number\}\}/g, invoice!.invoice_number)
           .replace(/\{\{total\}\}/g, `$${Number(invoice!.total).toFixed(2)}`)

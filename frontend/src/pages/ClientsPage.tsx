@@ -19,6 +19,7 @@ import {
   TFField,
   TFInput,
   TFLoading,
+  TFTextarea,
   TFPageHeader,
   TFTable,
   TFTBody,
@@ -28,7 +29,7 @@ import {
   TFTr,
 } from '../components/tf';
 
-const CLIENTS_QUERY = `query { clients { id name company email address1 address2 city state zip phone is_active created_at updated_at } }`;
+const CLIENTS_QUERY = `query { clients { id name company email address1 address2 city state zip phone default_email_template is_active created_at updated_at } }`;
 
 function EditClientModal({ client, onClose }: { client: Partial<Client>; onClose: () => void }) {
   const qc = useQueryClient();
@@ -47,6 +48,7 @@ function EditClientModal({ client, onClose }: { client: Partial<Client>; onClose
         state: c.state || null,
         zip: c.zip || null,
         phone: c.phone || null,
+        default_email_template: c.default_email_template || null,
         ...(c.id ? { is_active: c.is_active } : {}),
       };
       if (c.id) {
@@ -129,6 +131,25 @@ function EditClientModal({ client, onClose }: { client: Partial<Client>; onClose
             </TFField>
             <TFField label="Zip">
               <TFInput value={form.zip || ''} onChange={(e) => set('zip', e.target.value)} />
+            </TFField>
+            <TFField
+              label="Email Template"
+              className="md:col-span-2"
+              hint={
+                <>
+                  Overrides the user-level default when sending invoices to this client.
+                  Variables: {'{{client_name}}'}, {'{{client_first_name}}'},{' '}
+                  {'{{client_last_name}}'}, {'{{invoice_number}}'}, {'{{total}}'},{' '}
+                  {'{{due_date}}'}, {'{{your_name}}'}.
+                </>
+              }
+            >
+              <TFTextarea
+                className="h-32 font-mono"
+                value={form.default_email_template || ''}
+                onChange={(e) => set('default_email_template', e.target.value)}
+                placeholder="Leave blank to use the default in Settings"
+              />
             </TFField>
           </div>
           {validationError && (

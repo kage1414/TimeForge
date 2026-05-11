@@ -9,6 +9,7 @@ export interface Client {
   state: string;
   zip: string;
   phone: string;
+  default_email_template?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -56,6 +57,7 @@ export interface Invoice {
   client_city?: string;
   client_state?: string;
   client_zip?: string;
+  client_default_email_template?: string | null;
   invoice_number: string;
   status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
   issue_date: string;
