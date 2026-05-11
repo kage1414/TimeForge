@@ -8,6 +8,7 @@
 
 ## ✅ Done
 
+- [x] Split SettingsPage into tabs (Profile / Payment / Preferences / Email / Backups / Password / Users) using new TF library `TFTabs` family backed by `@radix-ui/react-tabs`. Single Save Settings button at the bottom of the form still saves Profile + Payment + Preferences + Email together. Backups, Password, Users tabs are independent.
 - [x] Remove unused PostgreSQL references — deleted `backend/scripts/migrate-pg-to-sqlite.ts` (a stale one-time migration script that never had its `pg` dep installed); updated CLAUDE.md tech stack + env vars to drop `DATABASE_URL` and call out better-sqlite3.
 - [x] CC option on invoice send (`sendInvoice(cc: [String!])`). Frontend send modal has a comma-separated CC input + "CC me ({email})" checkbox that prepends the user's own email to the list before sending.
 - [x] Per-client default email template (`clients.default_email_template` via migration `20260510000001_add_client_email_template`). Surfaces as a textarea in the ClientsPage edit modal; InvoiceDetailPage's send-modal templating prefers `invoice.client_default_email_template` over `settings.default_email_template`.

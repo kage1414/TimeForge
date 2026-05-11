@@ -16,3 +16,4 @@ export * from './TFDialog';
 export * from './TFConfirm';
 export * from './TFDropdownMenu';
 export * from './TFTable';
+export * from './TFTabs';

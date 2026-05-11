@@ -20,6 +20,10 @@ import {
   TFTBody,
   TFTd,
   TFTextarea,
+  TFTabs,
+  TFTabsContent,
+  TFTabsList,
+  TFTabsTrigger,
   TFTh,
   TFTHead,
   TFTr,
@@ -217,6 +221,17 @@ export default function SettingsPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
 
+      <TFTabs defaultValue="profile">
+        <TFTabsList>
+          <TFTabsTrigger value="profile">Profile</TFTabsTrigger>
+          <TFTabsTrigger value="payment">Payment</TFTabsTrigger>
+          <TFTabsTrigger value="preferences">Preferences</TFTabsTrigger>
+          <TFTabsTrigger value="email">Email</TFTabsTrigger>
+          <TFTabsTrigger value="backups">Backups</TFTabsTrigger>
+          <TFTabsTrigger value="password">Password</TFTabsTrigger>
+          {isAdmin && <TFTabsTrigger value="users">Users</TFTabsTrigger>}
+        </TFTabsList>
+
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -224,6 +239,7 @@ export default function SettingsPage() {
         }}
         className="space-y-6"
       >
+        <TFTabsContent value="profile">
         <TFCard>
           <TFCardTitle className="mb-4">Personal Details</TFCardTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -259,7 +275,9 @@ export default function SettingsPage() {
             </TFField>
           </div>
         </TFCard>
+        </TFTabsContent>
 
+        <TFTabsContent value="payment">
         <TFCard>
           <TFCardTitle className="mb-4">Online Payment Methods</TFCardTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -293,7 +311,9 @@ export default function SettingsPage() {
             </TFField>
           </div>
         </TFCard>
+        </TFTabsContent>
 
+        <TFTabsContent value="preferences" className="space-y-6">
         <TFCard>
           <TFCardTitle className="mb-4">Display</TFCardTitle>
           <TFCheckbox
@@ -363,7 +383,9 @@ export default function SettingsPage() {
             </TFField>
           </div>
         </TFCard>
+        </TFTabsContent>
 
+        <TFTabsContent value="email">
         <TFCard>
           <div className="flex items-center justify-between mb-4">
             <TFCardTitle>Email (SMTP)</TFCardTitle>
@@ -445,17 +467,19 @@ export default function SettingsPage() {
             {testSmtp.isPending ? 'Testing...' : 'Test Connection'}
           </TFButton>
         </TFCard>
+        </TFTabsContent>
 
         <TFButton type="submit" size="lg">
           Save Settings
         </TFButton>
       </form>
 
-      <div className="mt-6">
+      <TFTabsContent value="backups">
         <BackupSettings />
-      </div>
+      </TFTabsContent>
 
-      <form onSubmit={handleChangePassword} className="mt-6">
+      <TFTabsContent value="password">
+      <form onSubmit={handleChangePassword}>
         <TFCard>
           <TFCardTitle className="mb-4">Change Password</TFCardTitle>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -489,9 +513,11 @@ export default function SettingsPage() {
           </TFButton>
         </TFCard>
       </form>
+      </TFTabsContent>
 
       {isAdmin && (
-        <TFCard className="mt-6" padding="none">
+      <TFTabsContent value="users">
+        <TFCard padding="none">
           <div className="px-4 pt-4">
             <TFCardTitle className="mb-4">User Permissions</TFCardTitle>
           </div>
@@ -537,7 +563,9 @@ export default function SettingsPage() {
             </TFTBody>
           </TFTable>
         </TFCard>
+      </TFTabsContent>
       )}
+      </TFTabs>
     </div>
   );
 }
