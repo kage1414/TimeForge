@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import fs from 'fs';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
@@ -20,8 +19,8 @@ import {
 import {
   deleteInvoiceExports,
   generateExportsAsync,
+  readExportFile,
 } from '../exports/generator';
-import { invoicePdfPath } from '../exports/paths';
 import { decodeBackup, restoreUserBackup } from '../backup/restore';
 
 function toBackupDestinationGql(row: BackupDestinationRow) {
@@ -1014,17 +1013,15 @@ export const resolvers = {
       if (ccList.length) mailOptions.cc = ccList;
 
       if (attachPdf) {
-        const pdfFile = invoicePdfPath(invoice.user_id, invoice.client_id, invoice.id);
-        try {
-          const buf = await fs.promises.readFile(pdfFile);
-          mailOptions.attachments = [{
-            filename: `Invoice-${invoice.invoice_number}.pdf`,
-            content: buf,
-            contentType: 'application/pdf',
-          }];
-        } catch {
+        const buf = await readExportFile(invoice.user_id, invoice.client_id, invoice.id, 'pdf');
+        if (!buf) {
           throw new GraphQLError('Invoice PDF is not available. Try regenerating the export.');
         }
+        mailOptions.attachments = [{
+          filename: `Invoice-${invoice.invoice_number}.pdf`,
+          content: buf,
+          contentType: 'application/pdf',
+        }];
       }
 
       await transport.sendMail(mailOptions);

@@ -8,6 +8,7 @@
 
 ## ✅ Done
 
+- [x] Optional S3 storage for invoice PDFs/CSVs via `INVOICE_S3_BUCKET` (+ `INVOICE_S3_REGION`/`_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY` and optional `_ENDPOINT`/`_PREFIX`/`_FORCE_PATH_STYLE`). Falls back to disk when unset. New `backend/src/exports/storage.ts` (`writeExport`/`readExport`/`exportExists`/`deleteExportFile`/`isS3Configured`) is the single I/O surface; `generator.ts`, the `/api/invoices/:id/export.{pdf,csv}` route, and `sendInvoice` all go through it. Reused the existing AES-Sig V4 client; added `deleteFromS3`/`s3ObjectExists` to `providers/s3.ts`.
 - [x] Split SettingsPage into tabs (Profile / Payment / Preferences / Email / Backups / Password / Users) using new TF library `TFTabs` family backed by `@radix-ui/react-tabs`. Single Save Settings button at the bottom of the form still saves Profile + Payment + Preferences + Email together. Backups, Password, Users tabs are independent.
 - [x] Remove unused PostgreSQL references — deleted `backend/scripts/migrate-pg-to-sqlite.ts` (a stale one-time migration script that never had its `pg` dep installed); updated CLAUDE.md tech stack + env vars to drop `DATABASE_URL` and call out better-sqlite3.
 - [x] CC option on invoice send (`sendInvoice(cc: [String!])`). Frontend send modal has a comma-separated CC input + "CC me ({email})" checkbox that prepends the user's own email to the list before sending.

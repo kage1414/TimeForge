@@ -1,7 +1,6 @@
 import "dotenv/config";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
-import fs from "fs";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import path from "path";
@@ -12,9 +11,9 @@ import { typeDefs } from "./graphql/schema";
 import { resolvers } from "./graphql/resolvers";
 import {
   ensureExportsReady,
+  readExportFile,
   resetStaleGeneratingStatus,
 } from "./exports/generator";
-import { invoiceCsvPath, invoicePdfPath } from "./exports/paths";
 
 export const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
@@ -89,11 +88,8 @@ async function serveInvoiceExport(
       });
     return;
   }
-  const filePath =
-    kind === "pdf"
-      ? invoicePdfPath(invoice.user_id, invoice.client_id, invoiceId)
-      : invoiceCsvPath(invoice.user_id, invoice.client_id, invoiceId);
-  if (!fs.existsSync(filePath)) {
+  const buf = await readExportFile(invoice.user_id, invoice.client_id, invoiceId, kind);
+  if (!buf) {
     res.status(404).json({ error: "Export file missing" });
     return;
   }
@@ -103,7 +99,7 @@ async function serveInvoiceExport(
     kind === "pdf" ? "application/pdf" : "text/csv",
   );
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  fs.createReadStream(filePath).pipe(res);
+  res.send(buf);
 }
 
 app.get("/api/invoices/:id/export.pdf", requireUser, (req, res) => {

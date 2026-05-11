@@ -173,6 +173,7 @@ Single endpoint at `/graphql` (Apollo Server).
 ## Environment Variables
 
 - `DATABASE_PATH` - SQLite path (containers default to `/data/db.sqlite`; locally falls back to `os.tmpdir()/timeforge/db.sqlite` per `knexfile.ts`)
-- `EXPORT_DIR` - Where invoice export PDFs/CSVs are written (containers default to `/data/exports`)
+- `EXPORT_DIR` - Where invoice export PDFs/CSVs are written when storing on disk (containers default to `/data/exports`)
+- `INVOICE_S3_BUCKET` (+ `INVOICE_S3_REGION`, `INVOICE_S3_ACCESS_KEY_ID`, `INVOICE_S3_SECRET_ACCESS_KEY`, optional `INVOICE_S3_ENDPOINT`/`INVOICE_S3_PREFIX`/`INVOICE_S3_FORCE_PATH_STYLE`) - if `INVOICE_S3_BUCKET` is set, invoice PDF/CSV exports are stored in S3 instead of `EXPORT_DIR`. Falls back to disk when unset. Multi-tenant: every user's exports live under `<prefix>/<user_id>/<client_id>/invoice-<id>.{pdf,csv}` in the same bucket.
 - `PUPPETEER_EXECUTABLE_PATH` - Chromium binary path used by puppeteer (`/usr/bin/chromium-browser` in the alpine images)
 - `PORT` - Backend port (default: 4000)

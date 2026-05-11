@@ -55,7 +55,7 @@ function buildKey(config: S3Config, filename: string): string {
 
 async function signedRequest(
   config: S3Config,
-  method: 'PUT' | 'HEAD',
+  method: 'PUT' | 'HEAD' | 'DELETE',
   filename: string,
   body: Buffer,
   contentType: string
@@ -236,4 +236,21 @@ export async function downloadFromS3(config: S3Config, key: string): Promise<Buf
     throw new Error(`S3 download failed (${res.status}): ${text.slice(0, 500)}`);
   }
   return Buffer.from(await res.arrayBuffer());
+}
+
+export async function deleteFromS3(config: S3Config, key: string): Promise<void> {
+  const res = await signedRequest(config, 'DELETE', key, Buffer.alloc(0), '');
+  // S3 returns 204 No Content on success; 404 if already gone is also acceptable.
+  if (!res.ok && res.status !== 204 && res.status !== 404) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`S3 delete failed (${res.status}): ${text.slice(0, 500)}`);
+  }
+}
+
+export async function s3ObjectExists(config: S3Config, key: string): Promise<boolean> {
+  const res = await signedRequest(config, 'HEAD', key, Buffer.alloc(0), '');
+  if (res.ok) return true;
+  if (res.status === 404) return false;
+  const text = await res.text().catch(() => '');
+  throw new Error(`S3 head failed (${res.status}): ${text.slice(0, 500)}`);
 }

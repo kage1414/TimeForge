@@ -1,15 +1,14 @@
-import fs from 'fs';
-import path from 'path';
 import puppeteer, { Browser } from 'puppeteer';
 import db from '../db';
 import { buildInvoiceCsv, buildInvoiceHtml } from './html';
+import { invoiceCsvPath, invoicePdfPath } from './paths';
 import {
-  ensureDir,
-  fileExists,
-  invoiceCsvPath,
-  invoiceExportDir,
-  invoicePdfPath,
-} from './paths';
+  deleteExportFile,
+  exportExists,
+  isS3Configured,
+  readExport,
+  writeExport,
+} from './storage';
 
 let browserPromise: Promise<Browser> | null = null;
 
@@ -79,23 +78,20 @@ async function runGeneration(invoiceId: number): Promise<void> {
     const html = buildInvoiceHtml(invoice, lineItems, settings);
     const csv = buildInvoiceCsv(invoice, lineItems);
 
-    const dir = invoiceExportDir(invoice.user_id, invoice.client_id);
-    await ensureDir(dir);
-    const pdfFile = invoicePdfPath(invoice.user_id, invoice.client_id, invoiceId);
-    const csvFile = invoiceCsvPath(invoice.user_id, invoice.client_id, invoiceId);
-
-    await fs.promises.writeFile(csvFile, csv, 'utf8');
+    await writeExport(invoice.user_id, invoice.client_id, invoiceId, 'csv', Buffer.from(csv, 'utf8'));
 
     const browser = await getBrowser();
     const page = await browser.newPage();
     try {
       await page.setContent(html, { waitUntil: 'networkidle0' });
-      await page.pdf({
-        path: pdfFile,
-        format: 'a4',
-        printBackground: true,
-        margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
-      });
+      const pdfBuf = Buffer.from(
+        await page.pdf({
+          format: 'a4',
+          printBackground: true,
+          margin: { top: '12mm', right: '12mm', bottom: '12mm', left: '12mm' },
+        }),
+      );
+      await writeExport(invoice.user_id, invoice.client_id, invoiceId, 'pdf', pdfBuf);
     } finally {
       await page.close().catch(() => {});
     }
@@ -120,24 +116,31 @@ export async function deleteInvoiceExports(
   clientId: number,
   invoiceId: number,
 ): Promise<void> {
-  for (const p of [invoicePdfPath(userId, clientId, invoiceId), invoiceCsvPath(userId, clientId, invoiceId)]) {
-    try {
-      await fs.promises.unlink(p);
-    } catch {
-      /* ignore */
-    }
-  }
+  await Promise.all([
+    deleteExportFile(userId, clientId, invoiceId, 'pdf'),
+    deleteExportFile(userId, clientId, invoiceId, 'csv'),
+  ]);
 }
 
 export async function ensureExportsReady(invoiceId: number): Promise<void> {
   const invoice = await db('invoices').where('id', invoiceId).first();
   if (!invoice) return;
-  const pdfFile = invoicePdfPath(invoice.user_id, invoice.client_id, invoiceId);
-  const csvFile = invoiceCsvPath(invoice.user_id, invoice.client_id, invoiceId);
-  const haveBoth = (await fileExists(pdfFile)) && (await fileExists(csvFile));
-  if (invoice.export_status === 'ready' && haveBoth) return;
+  const havePdf = await exportExists(invoice.user_id, invoice.client_id, invoiceId, 'pdf');
+  const haveCsv = await exportExists(invoice.user_id, invoice.client_id, invoiceId, 'csv');
+  if (invoice.export_status === 'ready' && havePdf && haveCsv) return;
   await generateExportsAsync(invoiceId);
 }
+
+export async function readExportFile(
+  userId: number,
+  clientId: number,
+  invoiceId: number,
+  kind: 'pdf' | 'csv',
+): Promise<Buffer | null> {
+  return readExport(userId, clientId, invoiceId, kind);
+}
+
+export { isS3Configured };
 
 export async function resetStaleGeneratingStatus(): Promise<void> {
   // After a server restart, any 'generating' rows are stale.
