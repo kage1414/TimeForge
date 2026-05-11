@@ -1,8 +1,25 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { gql } from "../api/client";
-import { Invoice, Client } from "../types";
-import { useState } from "react";
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { gql } from '../api/client';
+import { Invoice, Client } from '../types';
+import { statusTone } from '../lib/statusTone';
+import {
+  TFBadge,
+  TFButton,
+  TFCard,
+  TFEmpty,
+  TFLink,
+  TFLoading,
+  TFPageHeader,
+  TFSelect,
+  TFTable,
+  TFTBody,
+  TFTd,
+  TFTh,
+  TFTHead,
+  TFTr,
+} from '../components/tf';
 
 const INVOICES_QUERY = `
   query($client_id: Int, $status: String) {
@@ -16,49 +33,38 @@ const INVOICES_QUERY = `
 
 const CLIENTS_QUERY = `query { clients { id name company } }`;
 
-const statusColors: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-800",
-  sent: "bg-blue-100 text-blue-800",
-  paid: "bg-green-100 text-green-800",
-  overdue: "bg-red-100 text-red-800",
-  cancelled: "bg-yellow-100 text-yellow-800",
-};
-
 export default function InvoicesPage() {
-  const [filterClient, setFilterClient] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterClient, setFilterClient] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   const vars: any = {};
   if (filterClient) vars.client_id = Number(filterClient);
   if (filterStatus) vars.status = filterStatus;
 
   const { data: invoices = [], isLoading } = useQuery<Invoice[]>({
-    queryKey: ["invoices", filterClient, filterStatus],
-    queryFn: async () =>
-      (await gql<{ invoices: Invoice[] }>(INVOICES_QUERY, vars)).invoices,
+    queryKey: ['invoices', filterClient, filterStatus],
+    queryFn: async () => (await gql<{ invoices: Invoice[] }>(INVOICES_QUERY, vars)).invoices,
   });
 
   const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["clients"],
-    queryFn: async () =>
-      (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
+    queryKey: ['clients'],
+    queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
   return (
     <div>
-      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-        <h1 className="text-2xl font-bold">Invoices</h1>
-        <Link
-          to="/invoices/new"
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-        >
-          Create Invoice
-        </Link>
-      </div>
+      <TFPageHeader
+        title="Invoices"
+        actions={
+          <TFButton asChild>
+            <Link to="/invoices/new">Create Invoice</Link>
+          </TFButton>
+        }
+      />
 
       <div className="flex flex-wrap gap-3 mb-4">
-        <select
-          className="border rounded p-2 text-sm"
+        <TFSelect
+          className="max-w-xs"
           value={filterClient}
           onChange={(e) => setFilterClient(e.target.value)}
         >
@@ -68,9 +74,9 @@ export default function InvoicesPage() {
               {c.name || c.company}
             </option>
           ))}
-        </select>
-        <select
-          className="border rounded p-2 text-sm"
+        </TFSelect>
+        <TFSelect
+          className="max-w-xs"
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
         >
@@ -80,78 +86,58 @@ export default function InvoicesPage() {
           <option value="paid">Paid</option>
           <option value="overdue">Overdue</option>
           <option value="cancelled">Cancelled</option>
-        </select>
+        </TFSelect>
       </div>
 
       {isLoading ? (
-        <p className="text-center py-12">Loading...</p>
+        <TFLoading />
       ) : invoices.length === 0 ? (
-        <p className="text-gray-500 text-center py-12">No invoices found.</p>
+        <TFEmpty>No invoices found.</TFEmpty>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left p-3">Invoice #</th>
-                  <th className="text-left p-3">Client</th>
-                  <th className="text-left p-3">Date</th>
-                  <th className="text-left p-3">Due</th>
-                  <th className="text-right p-3">Billed</th>
-                  <th className="text-right p-3">Credits</th>
-                  <th className="text-right p-3">Total</th>
-                  <th className="text-left p-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id} className="border-t hover:bg-gray-50">
-                    <td className="p-3">
-                      <Link
-                        to={`/invoices/${inv.id}`}
-                        className="text-indigo-600 hover:underline font-medium"
-                      >
-                        {inv.invoice_number}
-                      </Link>
-                    </td>
-                    <td className="p-3">
-                      <Link
-                        to={`/invoices/${inv.id}`}
-                        className="text-indigo-600 hover:underline font-medium"
-                      >
-                        {inv.client_name}
-                      </Link>
-                    </td>
-                    <td className="p-3">
-                      {new Date(inv.issue_date).toLocaleDateString()}
-                    </td>
-                    <td className="p-3">
-                      {new Date(inv.due_date).toLocaleDateString()}
-                    </td>
-                    <td className="p-3 text-right">
-                      ${Number(inv.subtotal).toFixed(2)}
-                    </td>
-                    <td className="p-3 text-right">
-                      {Number(inv.credits_applied) > 0
-                        ? `-$${Number(inv.credits_applied).toFixed(2)}`
-                        : "-"}
-                    </td>
-                    <td className="p-3 text-right font-medium">
-                      ${Number(inv.total).toFixed(2)}
-                    </td>
-                    <td className="p-3">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${statusColors[inv.status]}`}
-                      >
-                        {inv.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <TFCard padding="none" className="overflow-hidden">
+          <TFTable>
+            <TFTHead>
+              <TFTr>
+                <TFTh>Invoice #</TFTh>
+                <TFTh>Client</TFTh>
+                <TFTh>Date</TFTh>
+                <TFTh>Due</TFTh>
+                <TFTh className="text-right">Billed</TFTh>
+                <TFTh className="text-right">Credits</TFTh>
+                <TFTh className="text-right">Total</TFTh>
+                <TFTh>Status</TFTh>
+              </TFTr>
+            </TFTHead>
+            <TFTBody>
+              {invoices.map((inv) => (
+                <TFTr key={inv.id}>
+                  <TFTd>
+                    <TFLink asChild className="font-medium">
+                      <Link to={`/invoices/${inv.id}`}>{inv.invoice_number}</Link>
+                    </TFLink>
+                  </TFTd>
+                  <TFTd>
+                    <TFLink asChild className="font-medium">
+                      <Link to={`/invoices/${inv.id}`}>{inv.client_name}</Link>
+                    </TFLink>
+                  </TFTd>
+                  <TFTd>{new Date(inv.issue_date).toLocaleDateString()}</TFTd>
+                  <TFTd>{new Date(inv.due_date).toLocaleDateString()}</TFTd>
+                  <TFTd className="text-right">${Number(inv.subtotal).toFixed(2)}</TFTd>
+                  <TFTd className="text-right">
+                    {Number(inv.credits_applied) > 0
+                      ? `-$${Number(inv.credits_applied).toFixed(2)}`
+                      : '-'}
+                  </TFTd>
+                  <TFTd className="text-right font-medium">${Number(inv.total).toFixed(2)}</TFTd>
+                  <TFTd>
+                    <TFBadge tone={statusTone(inv.status)}>{inv.status}</TFBadge>
+                  </TFTd>
+                </TFTr>
+              ))}
+            </TFTBody>
+          </TFTable>
+        </TFCard>
       )}
     </div>
   );

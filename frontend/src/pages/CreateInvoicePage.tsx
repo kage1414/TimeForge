@@ -3,7 +3,17 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { gql } from '../api/client';
-import { Client, TimeEntry, UserSettings } from '../types';
+import { Client, TimeEntry } from '../types';
+import { cn } from '../lib/utils';
+import {
+  TFButton,
+  TFCard,
+  TFCheckbox,
+  TFField,
+  TFInput,
+  TFLink,
+  TFSelect,
+} from '../components/tf';
 
 type EntryAction = 'bill' | 'credit';
 
@@ -41,7 +51,9 @@ export default function CreateInvoicePage() {
 
   const { data: settings } = useQuery<{ default_due_days: number | null }>({
     queryKey: ['userSettings'],
-    queryFn: async () => (await gql<{ userSettings: { default_due_days: number | null } }>(SETTINGS_QUERY)).userSettings,
+    queryFn: async () =>
+      (await gql<{ userSettings: { default_due_days: number | null } }>(SETTINGS_QUERY))
+        .userSettings,
   });
 
   useEffect(() => {
@@ -57,15 +69,25 @@ export default function CreateInvoicePage() {
 
   const { data: unbilledEntries = [] } = useQuery<TimeEntry[]>({
     queryKey: ['unbilledEntries', clientId],
-    queryFn: async () => (await gql<{ timeEntries: TimeEntry[] }>(UNBILLED_ENTRIES_QUERY,
-      { client_id: Number(clientId), unbilled: true })).timeEntries,
+    queryFn: async () =>
+      (
+        await gql<{ timeEntries: TimeEntry[] }>(UNBILLED_ENTRIES_QUERY, {
+          client_id: Number(clientId),
+          unbilled: true,
+        })
+      ).timeEntries,
     enabled: !!clientId,
   });
 
   const { data: billedEntries = [] } = useQuery<TimeEntry[]>({
     queryKey: ['billedEntries', clientId],
-    queryFn: async () => (await gql<{ timeEntries: TimeEntry[] }>(BILLED_ENTRIES_QUERY,
-      { client_id: Number(clientId), billed: true })).timeEntries,
+    queryFn: async () =>
+      (
+        await gql<{ timeEntries: TimeEntry[] }>(BILLED_ENTRIES_QUERY, {
+          client_id: Number(clientId),
+          billed: true,
+        })
+      ).timeEntries,
     enabled: !!clientId,
   });
 
@@ -95,7 +117,7 @@ export default function CreateInvoicePage() {
             time_entry_ids: billIds,
             credit_time_entry_ids: [...creditUnbilledIds, ...Array.from(billedCredits)],
           },
-        }
+        },
       );
     },
     onSuccess: (data) => {
@@ -121,11 +143,8 @@ export default function CreateInvoicePage() {
   }
 
   function toggleEntryAction(id: number, action: EntryAction) {
-    if (entryActions.get(id) === action) {
-      removeEntryAction(id);
-    } else {
-      setEntryAction(id, action);
-    }
+    if (entryActions.get(id) === action) removeEntryAction(id);
+    else setEntryAction(id, action);
   }
 
   function selectAllBill() {
@@ -165,11 +184,9 @@ export default function CreateInvoicePage() {
   const billAmount = unbilledEntries
     .filter((e) => entryActions.get(e.id) === 'bill')
     .reduce((sum, e) => sum + entryAmount(e), 0);
-
   const unbilledCreditAmount = unbilledEntries
     .filter((e) => entryActions.get(e.id) === 'credit')
     .reduce((sum, e) => sum + entryAmount(e), 0);
-
   const billedCreditAmount = billedEntries
     .filter((e) => billedCredits.has(e.id))
     .reduce((sum, e) => sum + entryAmount(e), 0);
@@ -182,47 +199,66 @@ export default function CreateInvoicePage() {
 
   return (
     <div>
-      <Link to="/invoices" className="text-indigo-600 hover:underline text-sm">&larr; Back to Invoices</Link>
+      <TFLink asChild>
+        <Link to="/invoices">&larr; Back to Invoices</Link>
+      </TFLink>
       <h1 className="text-2xl font-bold mb-6 mt-1">Create Invoice</h1>
 
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
+      <TFCard className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client *</label>
-            <select className="border rounded p-2 w-full" value={clientId}
-              onChange={(e) => { setClientId(e.target.value); resetSelections(); }}>
+          <TFField label="Client" required>
+            <TFSelect
+              value={clientId}
+              onChange={(e) => {
+                setClientId(e.target.value);
+                resetSelections();
+              }}
+            >
               <option value="">Select Client</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name || c.company}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Invoice #</label>
-            <input className="border rounded p-2 w-full" placeholder="Auto-generated" value={invoiceNumber}
-              onChange={(e) => setInvoiceNumber(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tax Rate (%)</label>
-            <input className="border rounded p-2 w-full" type="number" step="0.01" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Due In (days)</label>
-            <input className="border rounded p-2 w-full" type="number" value={dueInDays} onChange={(e) => setDueInDays(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <input className="border rounded p-2 w-full" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name || c.company}
+                </option>
+              ))}
+            </TFSelect>
+          </TFField>
+          <TFField label="Invoice #">
+            <TFInput
+              placeholder="Auto-generated"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+            />
+          </TFField>
+          <TFField label="Tax Rate (%)">
+            <TFInput
+              type="number"
+              step="0.01"
+              value={taxRate}
+              onChange={(e) => setTaxRate(e.target.value)}
+            />
+          </TFField>
+          <TFField label="Due In (days)">
+            <TFInput
+              type="number"
+              value={dueInDays}
+              onChange={(e) => setDueInDays(e.target.value)}
+            />
+          </TFField>
+          <TFField label="Notes">
+            <TFInput value={notes} onChange={(e) => setNotes(e.target.value)} />
+          </TFField>
         </div>
-      </div>
+      </TFCard>
 
       {clientId && (
         <>
-          {/* Unbilled Time Entries */}
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <TFCard className="mb-6">
             <div className="flex justify-between items-center mb-3">
               <h2 className="font-semibold">Unbilled Time Entries</h2>
               {unbilledEntries.length > 0 && (
-                <button onClick={selectAllBill} className="text-indigo-600 text-sm hover:underline">Bill All</button>
+                <TFButton variant="link" size="sm" onClick={selectAllBill}>
+                  Bill All
+                </TFButton>
               )}
             </div>
             {unbilledEntries.length === 0 ? (
@@ -253,15 +289,33 @@ export default function CreateInvoicePage() {
                         <td className="py-2">{e.description || '-'}</td>
                         <td className="py-2">{formatEntryDate(e)}</td>
                         <td className="py-2 text-right">{isFlat ? '—' : hours.toFixed(2)}</td>
-                        <td className="py-2 text-right">{isFlat ? '—' : `$${Number(rate).toFixed(2)}`}</td>
+                        <td className="py-2 text-right">
+                          {isFlat ? '—' : `$${Number(rate).toFixed(2)}`}
+                        </td>
                         <td className="py-2 text-right">${amount.toFixed(2)}</td>
                         <td className="py-2 text-center space-x-1">
-                          <button onClick={() => toggleEntryAction(e.id, 'bill')}
-                            className={`px-2 py-1 rounded text-xs font-medium border ${action === 'bill' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'}`}>
+                          <button
+                            type="button"
+                            onClick={() => toggleEntryAction(e.id, 'bill')}
+                            className={cn(
+                              'px-2 py-1 rounded text-xs font-medium border',
+                              action === 'bill'
+                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400',
+                            )}
+                          >
                             Bill
                           </button>
-                          <button onClick={() => toggleEntryAction(e.id, 'credit')}
-                            className={`px-2 py-1 rounded text-xs font-medium border ${action === 'credit' ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-300 hover:border-green-400'}`}>
+                          <button
+                            type="button"
+                            onClick={() => toggleEntryAction(e.id, 'credit')}
+                            className={cn(
+                              'px-2 py-1 rounded text-xs font-medium border',
+                              action === 'credit'
+                                ? 'bg-green-600 text-white border-green-600'
+                                : 'bg-white text-gray-600 border-gray-300 hover:border-green-400',
+                            )}
+                          >
                             Credit
                           </button>
                         </td>
@@ -271,13 +325,14 @@ export default function CreateInvoicePage() {
                 </tbody>
               </table>
             )}
-          </div>
+          </TFCard>
 
-          {/* Billed Time Entries (for crediting) */}
           {billedEntries.length > 0 && (
-            <div className="bg-white rounded-lg shadow p-4 mb-6">
+            <TFCard className="mb-6">
               <h2 className="font-semibold mb-3">Billed Time Entries (Credit)</h2>
-              <p className="text-gray-500 text-xs mb-3">Select previously billed entries to create credits applied to this invoice.</p>
+              <p className="text-gray-500 text-xs mb-3">
+                Select previously billed entries to create credits applied to this invoice.
+              </p>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-gray-500 border-b">
@@ -297,30 +352,41 @@ export default function CreateInvoicePage() {
                     const hours = isFlat ? 0 : e.duration_minutes / 60;
                     const amount = entryAmount(e);
                     return (
-                      <tr key={e.id} className="border-b last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => toggleBilledCredit(e.id)}>
+                      <tr
+                        key={e.id}
+                        className="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => toggleBilledCredit(e.id)}
+                      >
                         <td className="py-2">
-                          <input type="checkbox" checked={billedCredits.has(e.id)} onChange={() => toggleBilledCredit(e.id)} />
+                          <TFCheckbox
+                            checked={billedCredits.has(e.id)}
+                            onChange={() => toggleBilledCredit(e.id)}
+                          />
                         </td>
                         <td className="py-2">{e.project_name}</td>
                         <td className="py-2">{e.description || '-'}</td>
                         <td className="py-2">{formatEntryDate(e)}</td>
                         <td className="py-2 text-right">{isFlat ? '—' : hours.toFixed(2)}</td>
-                        <td className="py-2 text-right">{isFlat ? '—' : `$${Number(rate).toFixed(2)}`}</td>
+                        <td className="py-2 text-right">
+                          {isFlat ? '—' : `$${Number(rate).toFixed(2)}`}
+                        </td>
                         <td className="py-2 text-right">${amount.toFixed(2)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-            </div>
+            </TFCard>
           )}
 
-          {/* Summary */}
-          <div className="bg-white rounded-lg shadow p-4 mb-6">
+          <TFCard className="mb-6">
             <h2 className="font-semibold mb-3">Summary</h2>
             <div className="text-sm space-y-1">
               <div className="flex justify-between">
-                <span>Subtotal ({Array.from(entryActions.values()).filter((a) => a === 'bill').length} entries)</span>
+                <span>
+                  Subtotal (
+                  {Array.from(entryActions.values()).filter((a) => a === 'bill').length} entries)
+                </span>
                 <span>${billAmount.toFixed(2)}</span>
               </div>
               {Number(taxRate) > 0 && (
@@ -340,15 +406,11 @@ export default function CreateInvoicePage() {
                 <span>${total.toFixed(2)}</span>
               </div>
             </div>
-          </div>
+          </TFCard>
 
-          <button
-            onClick={() => createInvoice.mutate()}
-            disabled={!hasSelections}
-            className="bg-indigo-600 text-white px-6 py-3 rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <TFButton size="lg" onClick={() => createInvoice.mutate()} disabled={!hasSelections}>
             Create Invoice
-          </button>
+          </TFButton>
         </>
       )}
     </div>

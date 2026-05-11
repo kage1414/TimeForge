@@ -1,9 +1,33 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
-import { gql } from "../api/client";
-import { Project, Client } from "../types";
-import ConfirmModal from "../components/ConfirmModal";
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
+import { gql } from '../api/client';
+import { Project, Client } from '../types';
+import {
+  TFBadge,
+  TFButton,
+  TFCard,
+  TFCheckbox,
+  TFConfirm,
+  TFDialog,
+  TFDialogBody,
+  TFDialogContent,
+  TFDialogFooter,
+  TFDialogHeader,
+  TFDialogTitle,
+  TFEmpty,
+  TFField,
+  TFInput,
+  TFLoading,
+  TFPageHeader,
+  TFSelect,
+  TFTable,
+  TFTBody,
+  TFTd,
+  TFTh,
+  TFTHead,
+  TFTr,
+} from '../components/tf';
 
 const PROJECTS_QUERY = `query { projects { id client_id client_name name description default_rate is_active created_at updated_at } }`;
 const CLIENTS_QUERY = `query { clients { id name company } }`;
@@ -17,10 +41,10 @@ interface ProjectForm {
 }
 
 const emptyForm: ProjectForm = {
-  client_id: "",
-  name: "",
-  description: "",
-  default_rate: "85",
+  client_id: '',
+  name: '',
+  description: '',
+  default_rate: '85',
   is_active: true,
 };
 
@@ -39,11 +63,11 @@ function EditProjectModal({
       ? {
           client_id: String(project.client_id),
           name: project.name,
-          description: project.description || "",
+          description: project.description || '',
           default_rate: String(project.default_rate),
           is_active: project.is_active,
         }
-      : emptyForm
+      : emptyForm,
   );
 
   const set = <K extends keyof ProjectForm>(field: K, value: ProjectForm[K]) =>
@@ -61,101 +85,91 @@ function EditProjectModal({
       if (project) {
         return gql(
           `mutation($id: Int!, $input: UpdateProjectInput!) { updateProject(id: $id, input: $input) { id } }`,
-          { id: project.id, input: body }
+          { id: project.id, input: body },
         );
       }
       return gql(
         `mutation($input: CreateProjectInput!) { createProject(input: $input) { id } }`,
-        { input: body }
+        { input: body },
       );
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success(project ? "Project updated" : "Project created");
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      toast.success(project ? 'Project updated' : 'Project created');
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold">{project ? "Edit Project" : "New Project"}</h2>
-          {project && (
-            <button
-              onClick={() => set("is_active", !form.is_active)}
-              className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                form.is_active
-                  ? "bg-green-100 text-green-700 hover:bg-green-200"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${form.is_active ? "bg-green-500" : "bg-gray-400"}`} />
-              {form.is_active ? "Active" : "Inactive"}
-            </button>
-          )}
-        </div>
+    <TFDialog open onOpenChange={(o) => !o && onClose()}>
+      <TFDialogContent size="lg">
+        <TFDialogHeader>
+          <div className="flex items-center justify-between w-full">
+            <TFDialogTitle>{project ? 'Edit Project' : 'New Project'}</TFDialogTitle>
+            {project && (
+              <button
+                type="button"
+                onClick={() => set('is_active', !form.is_active)}
+                className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  form.is_active
+                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${form.is_active ? 'bg-green-500' : 'bg-gray-400'}`}
+                />
+                {form.is_active ? 'Active' : 'Inactive'}
+              </button>
+            )}
+          </div>
+        </TFDialogHeader>
         <form
-          onSubmit={(e) => { e.preventDefault(); save.mutate(); }}
-          className="px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            save.mutate();
+          }}
         >
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client *</label>
-            <select
-              className="border rounded p-2 w-full"
-              required
-              value={form.client_id}
-              onChange={(e) => set("client_id", e.target.value)}
-            >
-              <option value="">Select Client</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name || c.company}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Project Name *</label>
-            <input
-              className="border rounded p-2 w-full"
-              required
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Default Rate ($/hr)</label>
-            <input
-              className="border rounded p-2 w-full"
-              type="number"
-              step="1"
-              value={form.default_rate}
-              onChange={(e) => set("default_rate", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <input
-              className="border rounded p-2 w-full"
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-            />
-          </div>
-          <div className="md:col-span-2 flex justify-end gap-2 pt-2 border-t">
-            <button type="button" onClick={onClose} className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">
+          <TFDialogBody>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TFField label="Client" required>
+                <TFSelect required value={form.client_id} onChange={(e) => set('client_id', e.target.value)}>
+                  <option value="">Select Client</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name || c.company}
+                    </option>
+                  ))}
+                </TFSelect>
+              </TFField>
+              <TFField label="Project Name" required>
+                <TFInput required value={form.name} onChange={(e) => set('name', e.target.value)} />
+              </TFField>
+              <TFField label="Default Rate ($/hr)">
+                <TFInput
+                  type="number"
+                  step="1"
+                  value={form.default_rate}
+                  onChange={(e) => set('default_rate', e.target.value)}
+                />
+              </TFField>
+              <TFField label="Description">
+                <TFInput value={form.description} onChange={(e) => set('description', e.target.value)} />
+              </TFField>
+            </div>
+          </TFDialogBody>
+          <TFDialogFooter>
+            <TFButton type="button" variant="muted" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={save.isPending}
-              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
-            >
+            </TFButton>
+            <TFButton type="submit" disabled={save.isPending}>
               Save
-            </button>
-          </div>
+            </TFButton>
+          </TFDialogFooter>
         </form>
-      </div>
-    </div>
+      </TFDialogContent>
+    </TFDialog>
   );
 }
 
@@ -166,105 +180,100 @@ export default function ProjectsPage() {
   const [showInactive, setShowInactive] = useState(false);
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
-    queryKey: ["projects"],
+    queryKey: ['projects'],
     queryFn: async () => (await gql<{ projects: Project[] }>(PROJECTS_QUERY)).projects,
   });
 
   const { data: clients = [] } = useQuery<Client[]>({
-    queryKey: ["clients"],
+    queryKey: ['clients'],
     queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
   const remove = useMutation({
-    mutationFn: (id: number) =>
-      gql(`mutation($id: Int!) { deleteProject(id: $id) }`, { id }),
+    mutationFn: (id: number) => gql(`mutation($id: Int!) { deleteProject(id: $id) }`, { id }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      toast.success("Project deleted");
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      toast.success('Project deleted');
     },
   });
 
   const visibleProjects = showInactive ? projects : projects.filter((p) => p.is_active);
 
-  if (isLoading) return <p className="text-center py-12">Loading...</p>;
+  if (isLoading) return <TFLoading />;
 
   return (
     <div>
-      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-        <h1 className="text-2xl font-bold">Projects</h1>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
-            <input
-              type="checkbox"
+      <TFPageHeader
+        title="Projects"
+        actions={
+          <>
+            <TFCheckbox
+              id="projects-show-inactive"
               checked={showInactive}
               onChange={(e) => setShowInactive(e.target.checked)}
-              className="rounded"
+              label="Show inactive"
             />
-            Show inactive
-          </label>
-          <button
-            onClick={() => setEditing(null)}
-            className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
-          >
-            Add Project
-          </button>
-        </div>
-      </div>
+            <TFButton onClick={() => setEditing(null)}>Add Project</TFButton>
+          </>
+        }
+      />
 
       {visibleProjects.length === 0 ? (
-        <p className="text-gray-500 text-center py-12">No projects.</p>
+        <TFEmpty>No projects.</TFEmpty>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="text-left p-3">Project</th>
-                <th className="text-left p-3">Client</th>
-                <th className="text-left p-3">Rate</th>
-                <th className="text-left p-3">Status</th>
-                <th className="text-right p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <TFCard padding="none" className="overflow-hidden">
+          <TFTable>
+            <TFTHead>
+              <TFTr>
+                <TFTh>Project</TFTh>
+                <TFTh>Client</TFTh>
+                <TFTh>Rate</TFTh>
+                <TFTh>Status</TFTh>
+                <TFTh className="text-right">Actions</TFTh>
+              </TFTr>
+            </TFTHead>
+            <TFTBody>
               {visibleProjects.map((p) => (
-                <tr key={p.id} className={`border-t hover:bg-gray-50 ${!p.is_active ? "opacity-50" : ""}`}>
-                  <td className="p-3 font-medium">{p.name}</td>
-                  <td className="p-3">{p.client_name}</td>
-                  <td className="p-3">${Number(p.default_rate).toFixed(2)}/hr</td>
-                  <td className="p-3">
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-                      p.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${p.is_active ? "bg-green-500" : "bg-gray-400"}`} />
-                      {p.is_active ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="p-3 text-right space-x-2">
-                    <button onClick={() => setEditing(p)} className="text-indigo-600 hover:underline">Edit</button>
-                    <button onClick={() => setConfirmDeleteId(p.id)} className="text-red-600 hover:underline">Delete</button>
-                  </td>
-                </tr>
+                <TFTr key={p.id} className={!p.is_active ? 'opacity-50' : ''}>
+                  <TFTd className="font-medium">{p.name}</TFTd>
+                  <TFTd>{p.client_name}</TFTd>
+                  <TFTd>${Number(p.default_rate).toFixed(2)}/hr</TFTd>
+                  <TFTd>
+                    <TFBadge tone={p.is_active ? 'success' : 'neutral'}>
+                      {p.is_active ? 'Active' : 'Inactive'}
+                    </TFBadge>
+                  </TFTd>
+                  <TFTd className="text-right space-x-2">
+                    <TFButton variant="link" size="sm" onClick={() => setEditing(p)}>
+                      Edit
+                    </TFButton>
+                    <TFButton
+                      variant="linkDanger"
+                      size="sm"
+                      onClick={() => setConfirmDeleteId(p.id)}
+                    >
+                      Delete
+                    </TFButton>
+                  </TFTd>
+                </TFTr>
               ))}
-            </tbody>
-          </table>
-          </div>
-        </div>
+            </TFTBody>
+          </TFTable>
+        </TFCard>
       )}
 
       {editing !== undefined && (
-        <EditProjectModal
-          project={editing}
-          clients={clients}
-          onClose={() => setEditing(undefined)}
-        />
+        <EditProjectModal project={editing} clients={clients} onClose={() => setEditing(undefined)} />
       )}
 
-      <ConfirmModal
+      <TFConfirm
         open={confirmDeleteId !== null}
         message="Delete this project?"
         confirmLabel="Delete"
-        onConfirm={() => { if (confirmDeleteId !== null) remove.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
+        onConfirm={() => {
+          if (confirmDeleteId !== null) remove.mutate(confirmDeleteId);
+          setConfirmDeleteId(null);
+        }}
         onCancel={() => setConfirmDeleteId(null)}
       />
     </div>

@@ -10,7 +10,20 @@ export async function gql<T = any>(query: string, variables?: Record<string, any
     },
     body: JSON.stringify({ query, variables }),
   });
-  const json = await res.json();
+  const text = await res.text();
+  if (!text) {
+    throw new Error(
+      `Server returned empty response (HTTP ${res.status}). The backend may be down or crashing — check backend logs.`
+    );
+  }
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(
+      `Server returned non-JSON response (HTTP ${res.status}): ${text.slice(0, 200)}`
+    );
+  }
   if (json.errors?.length) {
     const err = json.errors[0];
     if (err.extensions?.code === 'UNAUTHENTICATED') {

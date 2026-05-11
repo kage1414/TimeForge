@@ -5,12 +5,121 @@ import nodemailer from 'nodemailer';
 import { GraphQLError } from 'graphql';
 import db from '../db';
 import { JWT_SECRET, Context } from '../index';
+import { isBackupEncryptionConfigured } from '../backup/encryption';
+import {
+  BackupDestinationRow,
+  BackupProvider,
+  downloadBackupFromDestination,
+  encryptProviderConfig,
+  ensureBackupReady,
+  listBackupsForDestination,
+  runBackup,
+  testDestination,
+} from '../backup/run';
+import {
+  deleteInvoiceExports,
+  generateExportsAsync,
+  readExportFile,
+} from '../exports/generator';
+import { decodeBackup, restoreUserBackup } from '../backup/restore';
+import {
+  SCHEDULE_PRESETS,
+  SchedulePreset,
+  refreshDestinationSchedule,
+} from '../backup/scheduler';
+
+interface ScheduleInput {
+  schedule_preset: string;
+  schedule_cron?: string | null;
+  retention_days?: number | null;
+  retention_cron?: string | null;
+}
+
+function applyScheduleInput(target: any, schedule: ScheduleInput | undefined | null): boolean {
+  if (!schedule) return false;
+  const preset = schedule.schedule_preset as SchedulePreset;
+  if (!SCHEDULE_PRESETS.includes(preset)) {
+    throw new Error(`Invalid schedule_preset: ${schedule.schedule_preset}`);
+  }
+  target.schedule_preset = preset;
+  target.schedule_cron = preset === 'custom' ? schedule.schedule_cron || null : null;
+  target.retention_days =
+    typeof schedule.retention_days === 'number' && schedule.retention_days > 0
+      ? Math.floor(schedule.retention_days)
+      : null;
+  target.retention_cron = target.retention_days ? schedule.retention_cron || null : null;
+  return true;
+}
+
+function toBackupDestinationGql(row: BackupDestinationRow) {
+  const base = {
+    id: row.id,
+    name: row.name,
+    provider: row.provider,
+    last_run_at: row.last_run_at ? new Date(row.last_run_at as any).toISOString() : null,
+    last_run_status: row.last_run_status,
+    last_run_error: row.last_run_error,
+    schedule_preset: row.schedule_preset || 'off',
+    schedule_cron: row.schedule_cron,
+    next_run_at: row.next_run_at ? new Date(row.next_run_at as any).toISOString() : null,
+    retention_days: row.retention_days,
+    retention_cron: row.retention_cron,
+    retention_last_run_at: row.retention_last_run_at
+      ? new Date(row.retention_last_run_at as any).toISOString()
+      : null,
+    retention_last_error: row.retention_last_error,
+    retention_next_run_at: row.retention_next_run_at
+      ? new Date(row.retention_next_run_at as any).toISOString()
+      : null,
+    created_at: new Date(row.created_at as any).toISOString(),
+    updated_at: new Date(row.updated_at as any).toISOString(),
+    s3_endpoint: null as string | null,
+    s3_region: null as string | null,
+    s3_bucket: null as string | null,
+    s3_access_key_id: null as string | null,
+    s3_prefix: null as string | null,
+    s3_force_path_style: null as boolean | null,
+    nextcloud_base_url: null as string | null,
+    nextcloud_username: null as string | null,
+    nextcloud_path: null as string | null,
+  };
+  // Surface non-secret fields for editing UX. We never decrypt secrets to the client.
+  try {
+    if (!isBackupEncryptionConfigured()) return base;
+    const { decryptProviderConfig } = require('../backup/run') as typeof import('../backup/run');
+    const decoded = decryptProviderConfig(row);
+    if (decoded.provider === 's3') {
+      base.s3_endpoint = decoded.config.endpoint || null;
+      base.s3_region = decoded.config.region;
+      base.s3_bucket = decoded.config.bucket;
+      base.s3_access_key_id = decoded.config.access_key_id;
+      base.s3_prefix = decoded.config.prefix || null;
+      base.s3_force_path_style = decoded.config.force_path_style ?? null;
+    } else if (decoded.provider === 'nextcloud') {
+      base.nextcloud_base_url = decoded.config.base_url;
+      base.nextcloud_username = decoded.config.username;
+      base.nextcloud_path = decoded.config.path || null;
+    }
+  } catch {
+    // If decryption fails (e.g. key rotated), still return identifying fields.
+  }
+  return base;
+}
 
 function toISO(val: any): string | null {
   if (!val) return null;
   if (val instanceof Date) return val.toISOString();
   if (typeof val === 'number') return new Date(val).toISOString();
   return String(val);
+}
+
+function parseExportedAtFromFilename(filename: string): string | null {
+  // Backup filename format: timeforge-backup-{email}-{userId}-{YYYY-MM-DDTHH-MM-SS-mmmZ}.json.gz
+  const m = /-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.json\.gz$/.exec(filename);
+  if (!m) return null;
+  const iso = m[1].replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/, 'T$1:$2:$3.$4Z');
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 function requireAuth(context: Context) {
@@ -36,6 +145,7 @@ export const resolvers = {
     due_date: (e: any) => toISO(e.due_date),
     created_at: (e: any) => toISO(e.created_at),
     updated_at: (e: any) => toISO(e.updated_at),
+    export_generated_at: (e: any) => toISO(e.export_generated_at),
   },
   Client: {
     created_at: (e: any) => toISO(e.created_at),
@@ -141,7 +251,7 @@ export const resolvers = {
       const user = requireAuth(context);
       const invoice = await db('invoices')
         .join('clients', 'invoices.client_id', 'clients.id')
-        .select('invoices.*', db.raw('COALESCE(clients.name, clients.company) as client_name'), 'clients.company as client_company', 'clients.email as client_email', 'clients.address1 as client_address1', 'clients.address2 as client_address2', 'clients.city as client_city', 'clients.state as client_state', 'clients.zip as client_zip')
+        .select('invoices.*', db.raw('COALESCE(clients.name, clients.company) as client_name'), 'clients.company as client_company', 'clients.email as client_email', 'clients.address1 as client_address1', 'clients.address2 as client_address2', 'clients.city as client_city', 'clients.state as client_state', 'clients.zip as client_zip', 'clients.default_email_template as client_default_email_template')
         .where('invoices.id', id)
         .where('invoices.user_id', user.id)
         .first();
@@ -151,6 +261,10 @@ export const resolvers = {
         .join('clients', 'credits.client_id', 'clients.id')
         .select('credits.*', db.raw('COALESCE(clients.name, clients.company) as client_name'))
         .where('applied_invoice_id', id);
+      // Backfill: kick off generation for any older invoice that hasn't been exported.
+      if (invoice.export_status === 'pending') {
+        generateExportsAsync(invoice.id);
+      }
       return { ...invoice, line_items, credits };
     },
 
@@ -235,6 +349,35 @@ export const resolvers = {
         .leftJoin('users', 'invites.created_by', 'users.id')
         .select('invites.*', 'users.name as creator_name')
         .orderBy('invites.created_at', 'desc');
+    },
+
+    backupConfigured: () => isBackupEncryptionConfigured(),
+
+    backupDestinationFiles: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const row: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .first();
+      if (!row) throw new GraphQLError('Backup destination not found');
+      const files = await listBackupsForDestination(row);
+      return files
+        .map((f) => ({
+          filename: f.filename,
+          size: f.size,
+          last_modified: f.last_modified,
+          exported_at: parseExportedAtFromFilename(f.filename),
+        }))
+        .sort((a, b) => {
+          const ta = Date.parse(a.last_modified) || 0;
+          const tb = Date.parse(b.last_modified) || 0;
+          return tb - ta;
+        });
+    },
+
+    backupDestinations: async (_: any, __: any, context: Context) => {
+      const user = requireAuth(context);
+      const rows = await db('backup_destinations').where('user_id', user.id).orderBy('id');
+      return rows.map(toBackupDestinationGql);
     },
   },
 
@@ -518,7 +661,11 @@ export const resolvers = {
           tax_amount: parseFloat(tax_amount.toFixed(2)),
           total: parseFloat(total.toFixed(2)),
           updated_at: db.fn.now(),
+          export_status: 'pending',
+          export_error: null,
+          export_generated_at: null,
         });
+        generateExportsAsync(invoice.id);
       }
       return updated;
     },
@@ -725,8 +872,12 @@ export const resolvers = {
           tax_amount: parseFloat(tax_amount.toFixed(2)),
           credits_applied: 0,
           total: parseFloat(Math.max(0, total).toFixed(2)),
+          export_status: 'pending',
+          export_error: null,
+          export_generated_at: null,
         })
         .returning('*');
+      generateExportsAsync(invoice.id);
       return updated;
     },
 
@@ -756,6 +907,7 @@ export const resolvers = {
       }
       await db('invoice_line_items').where('invoice_id', id).del();
       await db('invoices').where({ id, user_id: user.id }).del();
+      await deleteInvoiceExports(invoice.user_id, invoice.client_id, id);
       return true;
     },
 
@@ -790,7 +942,7 @@ export const resolvers = {
       }
     },
 
-    sendInvoice: async (_: any, { id, to, body, pdfBase64 }: { id: number; to: string; body?: string; pdfBase64?: string }, context: Context) => {
+    sendInvoice: async (_: any, { id, to, cc, body, attachPdf }: { id: number; to: string; cc?: string[] | null; body?: string; attachPdf?: boolean }, context: Context) => {
       const user = requireAuth(context);
       const settings = await db('user_settings').where('user_id', user.id).first();
       if (!settings?.smtp_host || !settings?.smtp_user || !settings?.smtp_pass) {
@@ -804,6 +956,12 @@ export const resolvers = {
         .where('invoices.user_id', user.id)
         .first();
       if (!invoice) throw new GraphQLError('Invoice not found');
+
+      if (attachPdf) {
+        if (invoice.export_status !== 'ready') {
+          throw new GraphQLError('Invoice export is still being generated. Try again in a moment.');
+        }
+      }
 
       const lineItems = await db('invoice_line_items').where('invoice_id', id).orderBy('id');
       const credits = await db('credits').where('applied_invoice_id', id);
@@ -883,17 +1041,25 @@ export const resolvers = {
         auth: { user: settings.smtp_user, pass: settings.smtp_pass },
       });
 
+      const ccList = (cc || [])
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
       const mailOptions: any = {
         from: `"${fromName}" <${fromEmail}>`,
         to,
         subject: `Invoice #${invoice.invoice_number} from ${fromName}`,
         html,
       };
+      if (ccList.length) mailOptions.cc = ccList;
 
-      if (pdfBase64) {
+      if (attachPdf) {
+        const buf = await readExportFile(invoice.user_id, invoice.client_id, invoice.id, 'pdf');
+        if (!buf) {
+          throw new GraphQLError('Invoice PDF is not available. Try regenerating the export.');
+        }
         mailOptions.attachments = [{
           filename: `Invoice-${invoice.invoice_number}.pdf`,
-          content: Buffer.from(pdfBase64, 'base64'),
+          content: buf,
           contentType: 'application/pdf',
         }];
       }
@@ -941,6 +1107,19 @@ export const resolvers = {
       return imported;
     },
 
+    regenerateInvoiceExports: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const invoice = await db('invoices').where({ id, user_id: user.id }).first();
+      if (!invoice) throw new GraphQLError('Invoice not found');
+      await db('invoices').where('id', id).update({
+        export_status: 'pending',
+        export_error: null,
+        export_generated_at: null,
+      });
+      generateExportsAsync(id);
+      return { ...invoice, export_status: 'pending', export_error: null, export_generated_at: null };
+    },
+
     testSmtp: async (_: any, { host, port, user: smtpUser, pass, secure }: { host: string; port: number; user: string; pass: string; secure: boolean }, context: Context) => {
       requireAuth(context);
       const transport = nodemailer.createTransport({
@@ -951,6 +1130,121 @@ export const resolvers = {
       });
       await transport.verify();
       return true;
+    },
+
+    createBackupDestination: async (
+      _: any,
+      {
+        input,
+      }: {
+        input: {
+          name: string;
+          provider: string;
+          s3?: any;
+          nextcloud?: any;
+          schedule?: ScheduleInput;
+        };
+      },
+      context: Context
+    ) => {
+      const user = requireAuth(context);
+      ensureBackupReady();
+      const provider = input.provider as BackupProvider;
+      let config_encrypted: string;
+      if (provider === 's3') {
+        if (!input.s3) throw new Error('s3 config required for provider "s3"');
+        config_encrypted = encryptProviderConfig({ provider: 's3', config: input.s3 });
+      } else if (provider === 'nextcloud') {
+        if (!input.nextcloud) throw new Error('nextcloud config required for provider "nextcloud"');
+        config_encrypted = encryptProviderConfig({ provider: 'nextcloud', config: input.nextcloud });
+      } else {
+        throw new Error(`Unsupported provider: ${input.provider}`);
+      }
+      const insert: any = { user_id: user.id, name: input.name, provider, config_encrypted };
+      applyScheduleInput(insert, input.schedule);
+      const [row] = await db('backup_destinations').insert(insert).returning('*');
+      await refreshDestinationSchedule(row.id);
+      const fresh = await db('backup_destinations').where('id', row.id).first();
+      return toBackupDestinationGql(fresh!);
+    },
+
+    updateBackupDestination: async (
+      _: any,
+      {
+        id,
+        input,
+      }: {
+        id: number;
+        input: { name?: string; s3?: any; nextcloud?: any; schedule?: ScheduleInput };
+      },
+      context: Context
+    ) => {
+      const user = requireAuth(context);
+      ensureBackupReady();
+      const existing: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .first();
+      if (!existing) throw new Error('Backup destination not found');
+      const update: any = { updated_at: db.fn.now() };
+      if (typeof input.name === 'string') update.name = input.name;
+      if (existing.provider === 's3' && input.s3) {
+        update.config_encrypted = encryptProviderConfig({ provider: 's3', config: input.s3 });
+      } else if (existing.provider === 'nextcloud' && input.nextcloud) {
+        update.config_encrypted = encryptProviderConfig({ provider: 'nextcloud', config: input.nextcloud });
+      }
+      const scheduleChanged = applyScheduleInput(update, input.schedule);
+      const [row] = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .update(update)
+        .returning('*');
+      if (scheduleChanged) await refreshDestinationSchedule(id);
+      const fresh = await db('backup_destinations').where('id', id).first();
+      return toBackupDestinationGql(fresh!);
+    },
+
+    deleteBackupDestination: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const count = await db('backup_destinations').where({ id, user_id: user.id }).del();
+      return count > 0;
+    },
+
+    testBackupDestination: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const row: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .first();
+      if (!row) throw new Error('Backup destination not found');
+      await testDestination(row);
+      return true;
+    },
+
+    runBackupDestination: async (_: any, { id }: { id: number }, context: Context) => {
+      const user = requireAuth(context);
+      const row: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id, user_id: user.id })
+        .first();
+      if (!row) throw new Error('Backup destination not found');
+      const result = await runBackup(row);
+      return { filename: result.filename, bytes: result.bytes };
+    },
+
+    restoreBackup: async (
+      _: any,
+      { destinationId, filename }: { destinationId: number; filename: string },
+      context: Context,
+    ) => {
+      const user = requireAuth(context);
+      const row: BackupDestinationRow | undefined = await db('backup_destinations')
+        .where({ id: destinationId, user_id: user.id })
+        .first();
+      if (!row) throw new GraphQLError('Backup destination not found');
+      const buffer = await downloadBackupFromDestination(row, filename);
+      if (!buffer.length) throw new GraphQLError('Backup file is empty');
+      const backup = decodeBackup(buffer);
+      const counts = await restoreUserBackup(user.id, backup);
+      const restoredInvoiceIds = await db('invoices').where('user_id', user.id).pluck('id');
+      for (const id of restoredInvoiceIds) generateExportsAsync(id);
+      return { ...counts, exported_at: backup.exported_at || null };
     },
   },
 };

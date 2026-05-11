@@ -3,8 +3,12 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
+    env_file:
+      - path: ./backend/.env
+        required: false
     environment:
       DATABASE_PATH: /data/db.sqlite
+      EXPORT_DIR: /data/exports
       PORT: "4000"
       CHOKIDAR_USEPOLLING: "true"
     ports:

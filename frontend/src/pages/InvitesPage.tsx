@@ -3,7 +3,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { gql } from '../api/client';
 import { Invite } from '../types';
-import ConfirmModal from '../components/ConfirmModal';
+import {
+  TFBadge,
+  TFBadgeTone,
+  TFButton,
+  TFCard,
+  TFCardTitle,
+  TFConfirm,
+  TFEmpty,
+  TFField,
+  TFInput,
+  TFLoading,
+  TFPageHeader,
+  TFTable,
+  TFTBody,
+  TFTd,
+  TFTh,
+  TFTHead,
+  TFTr,
+} from '../components/tf';
 
 const INVITES_QUERY = `query { invites { id token email created_by creator_name used_by used_at expires_at created_at } }`;
 
@@ -35,8 +53,7 @@ export default function InvitesPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: number) =>
-      gql('mutation($id: Int!) { deleteInvite(id: $id) }', { id }),
+    mutationFn: (id: number) => gql('mutation($id: Int!) { deleteInvite(id: $id) }', { id }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invites'] });
       toast.success('Invite deleted');
@@ -49,96 +66,110 @@ export default function InvitesPage() {
     toast.success('Invite link copied');
   }
 
-  function getStatus(invite: Invite): { label: string; color: string } {
-    if (invite.used_by) return { label: 'Used', color: 'bg-green-100 text-green-800' };
-    if (new Date(invite.expires_at) < new Date()) return { label: 'Expired', color: 'bg-red-100 text-red-800' };
-    return { label: 'Pending', color: 'bg-blue-100 text-blue-800' };
+  function getStatus(invite: Invite): { label: string; tone: TFBadgeTone } {
+    if (invite.used_by) return { label: 'Used', tone: 'success' };
+    if (new Date(invite.expires_at) < new Date()) return { label: 'Expired', tone: 'danger' };
+    return { label: 'Pending', tone: 'info' };
   }
 
-  if (isLoading) return <div className="text-center py-12">Loading...</div>;
+  if (isLoading) return <TFLoading />;
 
   return (
     <div>
-      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-        <h1 className="text-2xl font-bold">Invites</h1>
-        <button onClick={() => setShowCreate(true)}
-          className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">
-          Create Invite
-        </button>
-      </div>
+      <TFPageHeader
+        title="Invites"
+        actions={<TFButton onClick={() => setShowCreate(true)}>Create Invite</TFButton>}
+      />
 
       {showCreate && (
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <h2 className="font-semibold mb-4">New Invite</h2>
+        <TFCard className="mb-6">
+          <TFCardTitle className="mb-4">New Invite</TFCardTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email (optional)</label>
-              <input className="border rounded p-2 w-full" type="email" value={email}
+            <TFField label="Email (optional)">
+              <TFInput
+                type="email"
+                value={email}
                 placeholder="Restrict to specific email"
-                onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Expires in (days)</label>
-              <input className="border rounded p-2 w-full" type="number" min={1} max={90} value={days}
-                onChange={(e) => setDays(Number(e.target.value))} />
-            </div>
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Expires in (days)">
+              <TFInput
+                type="number"
+                min={1}
+                max={90}
+                value={days}
+                onChange={(e) => setDays(Number(e.target.value))}
+              />
+            </TFField>
           </div>
           <div className="flex gap-2 mt-4">
-            <button onClick={() => create.mutate()}
-              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Create</button>
-            <button onClick={() => setShowCreate(false)}
-              className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">Cancel</button>
+            <TFButton onClick={() => create.mutate()}>Create</TFButton>
+            <TFButton variant="muted" onClick={() => setShowCreate(false)}>
+              Cancel
+            </TFButton>
           </div>
-        </div>
+        </TFCard>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-left text-gray-600">
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Created By</th>
-              <th className="px-4 py-3">Expires</th>
-              <th className="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+      <TFCard padding="none" className="overflow-hidden">
+        <TFTable>
+          <TFTHead>
+            <TFTr>
+              <TFTh>Status</TFTh>
+              <TFTh>Email</TFTh>
+              <TFTh>Created By</TFTh>
+              <TFTh>Expires</TFTh>
+              <TFTh>Actions</TFTh>
+            </TFTr>
+          </TFTHead>
+          <TFTBody>
             {invites.map((inv) => {
               const status = getStatus(inv);
               return (
-                <tr key={inv.id} className="border-t hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${status.color}`}>{status.label}</span>
-                  </td>
-                  <td className="px-4 py-3">{inv.email || '-'}</td>
-                  <td className="px-4 py-3">{inv.creator_name || '-'}</td>
-                  <td className="px-4 py-3">{new Date(inv.expires_at).toLocaleDateString()}</td>
-                  <td className="px-4 py-3 flex gap-2">
+                <TFTr key={inv.id}>
+                  <TFTd>
+                    <TFBadge tone={status.tone}>{status.label}</TFBadge>
+                  </TFTd>
+                  <TFTd>{inv.email || '-'}</TFTd>
+                  <TFTd>{inv.creator_name || '-'}</TFTd>
+                  <TFTd>{new Date(inv.expires_at).toLocaleDateString()}</TFTd>
+                  <TFTd className="space-x-2">
                     {!inv.used_by && (
-                      <button onClick={() => copyLink(inv.token)}
-                        className="text-indigo-600 hover:underline">Copy Link</button>
+                      <TFButton variant="link" size="sm" onClick={() => copyLink(inv.token)}>
+                        Copy Link
+                      </TFButton>
                     )}
-                    <button onClick={() => setConfirmDeleteId(inv.id)}
-                      className="text-red-600 hover:underline">Delete</button>
-                  </td>
-                </tr>
+                    <TFButton
+                      variant="linkDanger"
+                      size="sm"
+                      onClick={() => setConfirmDeleteId(inv.id)}
+                    >
+                      Delete
+                    </TFButton>
+                  </TFTd>
+                </TFTr>
               );
             })}
             {invites.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No invites yet</td></tr>
+              <TFTr>
+                <TFTd colSpan={5}>
+                  <TFEmpty>No invites yet</TFEmpty>
+                </TFTd>
+              </TFTr>
             )}
-          </tbody>
-        </table>
-        </div>
-      </div>
+          </TFTBody>
+        </TFTable>
+      </TFCard>
 
-      <ConfirmModal
+      <TFConfirm
         open={confirmDeleteId !== null}
         message="Delete this invite?"
         confirmLabel="Delete"
-        onConfirm={() => { if (confirmDeleteId !== null) remove.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
+        onConfirm={() => {
+          if (confirmDeleteId !== null) remove.mutate(confirmDeleteId);
+          setConfirmDeleteId(null);
+        }}
         onCancel={() => setConfirmDeleteId(null)}
       />
     </div>
