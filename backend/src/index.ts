@@ -14,6 +14,7 @@ import {
   readExportFile,
   resetStaleGeneratingStatus,
 } from "./exports/generator";
+import { startBackupScheduler } from "./backup/scheduler";
 
 export const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
@@ -158,6 +159,7 @@ async function start() {
 
     await resetStaleGeneratingStatus();
     await seedAdmin();
+    startBackupScheduler();
 
     const server = new ApolloServer({ typeDefs, resolvers });
     await server.start();

@@ -14,6 +14,18 @@ import {
   TFSelect,
 } from './tf';
 
+type SchedulePreset = 'off' | 'daily' | 'every3days' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+
+const SCHEDULE_LABELS: Record<SchedulePreset, string> = {
+  off: 'Off (manual only)',
+  daily: 'Daily',
+  every3days: 'Every 3 days',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+  custom: 'Custom (cron)',
+};
+
 interface BackupDestination {
   id: number;
   name: string;
@@ -30,6 +42,14 @@ interface BackupDestination {
   last_run_at: string | null;
   last_run_status: 'ok' | 'error' | null;
   last_run_error: string | null;
+  schedule_preset: SchedulePreset;
+  schedule_cron: string | null;
+  next_run_at: string | null;
+  retention_days: number | null;
+  retention_cron: string | null;
+  retention_last_run_at: string | null;
+  retention_last_error: string | null;
+  retention_next_run_at: string | null;
 }
 
 const BACKUP_FIELDS = `
@@ -37,6 +57,8 @@ const BACKUP_FIELDS = `
   s3_endpoint s3_region s3_bucket s3_access_key_id s3_prefix s3_force_path_style
   nextcloud_base_url nextcloud_username nextcloud_path
   last_run_at last_run_status last_run_error
+  schedule_preset schedule_cron next_run_at
+  retention_days retention_cron retention_last_run_at retention_last_error retention_next_run_at
 `;
 
 const QUERY = `query {
@@ -59,6 +81,10 @@ interface FormState {
   ncUser: string;
   ncPass: string;
   ncPath: string;
+  schedulePreset: SchedulePreset;
+  scheduleCron: string;
+  retentionDays: string;
+  retentionCron: string;
 }
 
 const emptyForm: FormState = {
@@ -76,6 +102,10 @@ const emptyForm: FormState = {
   ncUser: '',
   ncPass: '',
   ncPath: '',
+  schedulePreset: 'off',
+  scheduleCron: '',
+  retentionDays: '',
+  retentionCron: '',
 };
 
 interface RestoreCounts {
@@ -172,19 +202,28 @@ export default function BackupSettings() {
                 path: form.ncPath || null,
               },
             };
+      const schedule = {
+        schedule_preset: form.schedulePreset,
+        schedule_cron: form.schedulePreset === 'custom' ? form.scheduleCron || null : null,
+        retention_days:
+          form.retentionDays && Number(form.retentionDays) > 0
+            ? Math.floor(Number(form.retentionDays))
+            : null,
+        retention_cron: form.retentionDays && form.retentionCron ? form.retentionCron : null,
+      };
       if (form.id == null) {
         return gql(
           `mutation($input: CreateBackupDestinationInput!) {
             createBackupDestination(input: $input) { id }
           }`,
-          { input: { name: form.name, provider: form.provider, ...payload } },
+          { input: { name: form.name, provider: form.provider, ...payload, schedule } },
         );
       }
       return gql(
         `mutation($id: Int!, $input: UpdateBackupDestinationInput!) {
           updateBackupDestination(id: $id, input: $input) { id }
         }`,
-        { id: form.id, input: { name: form.name, ...payload } },
+        { id: form.id, input: { name: form.name, ...payload, schedule } },
       );
     },
     onSuccess: () => {
@@ -251,6 +290,12 @@ export default function BackupSettings() {
   });
 
   function startEdit(d: BackupDestination) {
+    const scheduleFields = {
+      schedulePreset: d.schedule_preset || 'off',
+      scheduleCron: d.schedule_cron || '',
+      retentionDays: d.retention_days != null ? String(d.retention_days) : '',
+      retentionCron: d.retention_cron || '',
+    };
     if (d.provider === 's3') {
       setForm({
         ...emptyForm,
@@ -264,6 +309,7 @@ export default function BackupSettings() {
         s3SecretAccessKey: '',
         s3Prefix: d.s3_prefix || '',
         s3PathStyle: !!d.s3_force_path_style,
+        ...scheduleFields,
       });
     } else {
       setForm({
@@ -275,6 +321,7 @@ export default function BackupSettings() {
         ncUser: d.nextcloud_username || '',
         ncPass: '',
         ncPath: d.nextcloud_path || '',
+        ...scheduleFields,
       });
     }
     setShowForm(true);
@@ -467,6 +514,27 @@ export default function BackupSettings() {
                         : ''}
                     </div>
                   )}
+                  {d.schedule_preset && d.schedule_preset !== 'off' && (
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      Schedule: {SCHEDULE_LABELS[d.schedule_preset]}
+                      {d.schedule_preset === 'custom' && d.schedule_cron
+                        ? ` (${d.schedule_cron})`
+                        : ''}
+                      {d.next_run_at
+                        ? ` — next ${new Date(d.next_run_at).toLocaleString()}`
+                        : ''}
+                    </div>
+                  )}
+                  {d.retention_days != null && d.retention_days > 0 && (
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      Retention: delete after {d.retention_days} day
+                      {d.retention_days === 1 ? '' : 's'}
+                      {d.retention_next_run_at
+                        ? ` — next check ${new Date(d.retention_next_run_at).toLocaleString()}`
+                        : ''}
+                      {d.retention_last_error ? ` — last error: ${d.retention_last_error}` : ''}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <TFButton
@@ -652,6 +720,68 @@ export default function BackupSettings() {
                 </TFField>
               </div>
             )}
+
+            <div className="border-t pt-4 mt-2">
+              <h4 className="font-semibold text-sm mb-3">Schedule</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <TFField label="Frequency">
+                  <TFSelect
+                    value={form.schedulePreset}
+                    onChange={(e) =>
+                      setForm({ ...form, schedulePreset: e.target.value as SchedulePreset })
+                    }
+                  >
+                    {(Object.keys(SCHEDULE_LABELS) as SchedulePreset[]).map((p) => (
+                      <option key={p} value={p}>
+                        {SCHEDULE_LABELS[p]}
+                      </option>
+                    ))}
+                  </TFSelect>
+                </TFField>
+                {form.schedulePreset === 'custom' && (
+                  <TFField
+                    label="Cron expression"
+                    hint="Standard 5-field cron (min hour day month weekday). Example: 0 2 * * * runs at 02:00 daily."
+                  >
+                    <TFInput
+                      placeholder="0 2 * * *"
+                      value={form.scheduleCron}
+                      onChange={(e) => setForm({ ...form, scheduleCron: e.target.value })}
+                    />
+                  </TFField>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t pt-4 mt-2">
+              <h4 className="font-semibold text-sm mb-3">Retention</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <TFField
+                  label="Delete backups older than (days)"
+                  hint="Leave blank to keep backups forever."
+                >
+                  <TFInput
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 30"
+                    value={form.retentionDays}
+                    onChange={(e) => setForm({ ...form, retentionDays: e.target.value })}
+                  />
+                </TFField>
+                {form.retentionDays && Number(form.retentionDays) > 0 && (
+                  <TFField
+                    label="Retention check schedule (cron)"
+                    hint="Optional. Defaults to 03:00 daily."
+                  >
+                    <TFInput
+                      placeholder="0 3 * * *"
+                      value={form.retentionCron}
+                      onChange={(e) => setForm({ ...form, retentionCron: e.target.value })}
+                    />
+                  </TFField>
+                )}
+              </div>
+            </div>
 
             <div className="flex justify-end gap-3 pt-2">
               <TFButton type="button" variant="outline" onClick={cancelForm}>

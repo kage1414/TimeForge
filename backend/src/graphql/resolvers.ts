@@ -22,6 +22,34 @@ import {
   readExportFile,
 } from '../exports/generator';
 import { decodeBackup, restoreUserBackup } from '../backup/restore';
+import {
+  SCHEDULE_PRESETS,
+  SchedulePreset,
+  refreshDestinationSchedule,
+} from '../backup/scheduler';
+
+interface ScheduleInput {
+  schedule_preset: string;
+  schedule_cron?: string | null;
+  retention_days?: number | null;
+  retention_cron?: string | null;
+}
+
+function applyScheduleInput(target: any, schedule: ScheduleInput | undefined | null): boolean {
+  if (!schedule) return false;
+  const preset = schedule.schedule_preset as SchedulePreset;
+  if (!SCHEDULE_PRESETS.includes(preset)) {
+    throw new Error(`Invalid schedule_preset: ${schedule.schedule_preset}`);
+  }
+  target.schedule_preset = preset;
+  target.schedule_cron = preset === 'custom' ? schedule.schedule_cron || null : null;
+  target.retention_days =
+    typeof schedule.retention_days === 'number' && schedule.retention_days > 0
+      ? Math.floor(schedule.retention_days)
+      : null;
+  target.retention_cron = target.retention_days ? schedule.retention_cron || null : null;
+  return true;
+}
 
 function toBackupDestinationGql(row: BackupDestinationRow) {
   const base = {
@@ -31,6 +59,18 @@ function toBackupDestinationGql(row: BackupDestinationRow) {
     last_run_at: row.last_run_at ? new Date(row.last_run_at as any).toISOString() : null,
     last_run_status: row.last_run_status,
     last_run_error: row.last_run_error,
+    schedule_preset: row.schedule_preset || 'off',
+    schedule_cron: row.schedule_cron,
+    next_run_at: row.next_run_at ? new Date(row.next_run_at as any).toISOString() : null,
+    retention_days: row.retention_days,
+    retention_cron: row.retention_cron,
+    retention_last_run_at: row.retention_last_run_at
+      ? new Date(row.retention_last_run_at as any).toISOString()
+      : null,
+    retention_last_error: row.retention_last_error,
+    retention_next_run_at: row.retention_next_run_at
+      ? new Date(row.retention_next_run_at as any).toISOString()
+      : null,
     created_at: new Date(row.created_at as any).toISOString(),
     updated_at: new Date(row.updated_at as any).toISOString(),
     s3_endpoint: null as string | null,
@@ -1094,7 +1134,17 @@ export const resolvers = {
 
     createBackupDestination: async (
       _: any,
-      { input }: { input: { name: string; provider: string; s3?: any; nextcloud?: any } },
+      {
+        input,
+      }: {
+        input: {
+          name: string;
+          provider: string;
+          s3?: any;
+          nextcloud?: any;
+          schedule?: ScheduleInput;
+        };
+      },
       context: Context
     ) => {
       const user = requireAuth(context);
@@ -1110,15 +1160,23 @@ export const resolvers = {
       } else {
         throw new Error(`Unsupported provider: ${input.provider}`);
       }
-      const [row] = await db('backup_destinations')
-        .insert({ user_id: user.id, name: input.name, provider, config_encrypted })
-        .returning('*');
-      return toBackupDestinationGql(row);
+      const insert: any = { user_id: user.id, name: input.name, provider, config_encrypted };
+      applyScheduleInput(insert, input.schedule);
+      const [row] = await db('backup_destinations').insert(insert).returning('*');
+      await refreshDestinationSchedule(row.id);
+      const fresh = await db('backup_destinations').where('id', row.id).first();
+      return toBackupDestinationGql(fresh!);
     },
 
     updateBackupDestination: async (
       _: any,
-      { id, input }: { id: number; input: { name?: string; s3?: any; nextcloud?: any } },
+      {
+        id,
+        input,
+      }: {
+        id: number;
+        input: { name?: string; s3?: any; nextcloud?: any; schedule?: ScheduleInput };
+      },
       context: Context
     ) => {
       const user = requireAuth(context);
@@ -1134,11 +1192,14 @@ export const resolvers = {
       } else if (existing.provider === 'nextcloud' && input.nextcloud) {
         update.config_encrypted = encryptProviderConfig({ provider: 'nextcloud', config: input.nextcloud });
       }
+      const scheduleChanged = applyScheduleInput(update, input.schedule);
       const [row] = await db('backup_destinations')
         .where({ id, user_id: user.id })
         .update(update)
         .returning('*');
-      return toBackupDestinationGql(row);
+      if (scheduleChanged) await refreshDestinationSchedule(id);
+      const fresh = await db('backup_destinations').where('id', id).first();
+      return toBackupDestinationGql(fresh!);
     },
 
     deleteBackupDestination: async (_: any, { id }: { id: number }, context: Context) => {

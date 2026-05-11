@@ -257,6 +257,14 @@ export const typeDefs = `#graphql
     last_run_at: String
     last_run_status: String
     last_run_error: String
+    schedule_preset: String!
+    schedule_cron: String
+    next_run_at: String
+    retention_days: Int
+    retention_cron: String
+    retention_last_run_at: String
+    retention_last_error: String
+    retention_next_run_at: String
     created_at: String!
     updated_at: String!
   }
@@ -294,17 +302,26 @@ export const typeDefs = `#graphql
     path: String
   }
 
+  input BackupScheduleInput {
+    schedule_preset: String!
+    schedule_cron: String
+    retention_days: Int
+    retention_cron: String
+  }
+
   input CreateBackupDestinationInput {
     name: String!
     provider: String!
     s3: S3DestinationInput
     nextcloud: NextcloudDestinationInput
+    schedule: BackupScheduleInput
   }
 
   input UpdateBackupDestinationInput {
     name: String
     s3: S3DestinationInput
     nextcloud: NextcloudDestinationInput
+    schedule: BackupScheduleInput
   }
 
   input CreateClientInput {

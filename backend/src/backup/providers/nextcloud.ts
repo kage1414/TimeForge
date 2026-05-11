@@ -155,6 +155,21 @@ export async function listFromNextcloud(config: NextcloudConfig): Promise<Nextcl
   return parseMultistatus(xml);
 }
 
+export async function deleteFromNextcloud(
+  config: NextcloudConfig,
+  filename: string,
+): Promise<void> {
+  const url = buildFileUrl(config, filename);
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { Authorization: authHeader(config) },
+  });
+  if (!res.ok && res.status !== 204 && res.status !== 404) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Nextcloud delete failed (${res.status}): ${text.slice(0, 500)}`);
+  }
+}
+
 export async function downloadFromNextcloud(
   config: NextcloudConfig,
   filename: string,

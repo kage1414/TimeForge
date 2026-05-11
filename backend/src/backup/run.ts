@@ -3,6 +3,7 @@ import { decryptJson, encryptJson, isBackupEncryptionConfigured } from './encryp
 import { backupFilename, buildUserBackup, gzipBackup } from './export';
 import {
   S3Config,
+  deleteFromS3,
   downloadFromS3,
   listFromS3,
   s3KeyFor,
@@ -11,6 +12,7 @@ import {
 } from './providers/s3';
 import {
   NextcloudConfig,
+  deleteFromNextcloud,
   downloadFromNextcloud,
   listFromNextcloud,
   testNextcloud,
@@ -28,6 +30,14 @@ export interface BackupDestinationRow {
   last_run_at: Date | string | null;
   last_run_status: string | null;
   last_run_error: string | null;
+  schedule_preset: string | null;
+  schedule_cron: string | null;
+  next_run_at: Date | string | null;
+  retention_days: number | null;
+  retention_cron: string | null;
+  retention_last_run_at: Date | string | null;
+  retention_last_error: string | null;
+  retention_next_run_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -163,4 +173,19 @@ export async function downloadBackupFromDestination(
     return downloadFromS3(cfg.config, s3KeyFor(cfg.config, filename));
   }
   return downloadFromNextcloud(cfg.config, filename);
+}
+
+export async function deleteBackupFromDestination(
+  row: BackupDestinationRow,
+  filename: string,
+): Promise<void> {
+  ensureBackupReady();
+  if (!BACKUP_FILE_RX.test(filename)) {
+    throw new Error('Refusing to delete non-backup file');
+  }
+  const cfg = decryptProviderConfig(row);
+  if (cfg.provider === 's3') {
+    return deleteFromS3(cfg.config, s3KeyFor(cfg.config, filename));
+  }
+  return deleteFromNextcloud(cfg.config, filename);
 }
