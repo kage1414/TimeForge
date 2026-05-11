@@ -2,6 +2,13 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../auth/AuthContext';
+import {
+  TFButton,
+  TFCard,
+  TFField,
+  TFInput,
+  TFLink,
+} from '../components/tf';
 
 export default function SignupPage() {
   const { signup } = useAuth();
@@ -41,41 +48,61 @@ export default function SignupPage() {
           <h1 className="text-3xl font-bold text-indigo-600">TimeForge</h1>
           <p className="text-gray-500 mt-2">Create your account</p>
         </div>
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Invite Token *</label>
-            <input type="text" required className="border rounded p-2 w-full" value={inviteToken}
-              onChange={(e) => setInviteToken(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-            <input type="email" required className="border rounded p-2 w-full" value={email}
-              onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-            <input type="text" className="border rounded p-2 w-full" value={name}
-              onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
-            <input type="password" required className="border rounded p-2 w-full" value={password}
-              onChange={(e) => setPassword(e.target.value)} />
-            <p className="text-xs text-gray-400 mt-1">Minimum 8 characters</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password *</label>
-            <input type="password" required className="border rounded p-2 w-full" value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)} />
-          </div>
-          <button type="submit" disabled={loading}
-            className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 disabled:opacity-50">
-            {loading ? 'Creating account...' : 'Create Account'}
-          </button>
-          <p className="text-center text-sm text-gray-500">
-            Already have an account? <Link to="/login" className="text-indigo-600 hover:underline">Sign in</Link>
-          </p>
-        </form>
+        <TFCard padding="lg">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <TFField label="Invite Token" required htmlFor="signup-invite">
+              <TFInput
+                id="signup-invite"
+                required
+                value={inviteToken}
+                onChange={(e) => setInviteToken(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Email" required htmlFor="signup-email">
+              <TFInput
+                id="signup-email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Name" htmlFor="signup-name">
+              <TFInput
+                id="signup-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Password" required hint="Minimum 8 characters" htmlFor="signup-password">
+              <TFInput
+                id="signup-password"
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </TFField>
+            <TFField label="Confirm Password" required htmlFor="signup-confirm">
+              <TFInput
+                id="signup-confirm"
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </TFField>
+            <TFButton type="submit" disabled={loading} block>
+              {loading ? 'Creating account...' : 'Create Account'}
+            </TFButton>
+            <p className="text-center text-sm text-gray-500">
+              Already have an account?{' '}
+              <TFLink asChild>
+                <Link to="/login">Sign in</Link>
+              </TFLink>
+            </p>
+          </form>
+        </TFCard>
       </div>
     </div>
   );

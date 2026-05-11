@@ -48,7 +48,27 @@
       "Bash(docker-compose -f docker-compose.dev.yml logs --tail=80 backend)",
       "Bash(docker-compose -f docker-compose.dev.yml build backend)",
       "Bash(docker-compose -f docker-compose.dev.yml up -d backend)",
-      "Bash(docker-compose -f docker-compose.dev.yml exec -T backend sh -c 'ls -l /usr/bin/chromium-browser; /usr/bin/chromium-browser --version')"
+      "Bash(docker-compose -f docker-compose.dev.yml exec -T backend sh -c 'ls -l /usr/bin/chromium-browser; /usr/bin/chromium-browser --version')",
+      "Bash(grep -rln *)",
+      "Bash(grep -n *)",
+      "Bash(git -C /Users/kylejohnson/code/TimeForge add backend/src/graphql/resolvers.ts backend/src/index.ts)",
+      "Bash(git -C /Users/kylejohnson/code/TimeForge status)",
+      "Bash(docker-compose -f /Users/kylejohnson/code/TimeForge/docker-compose.dev.yml logs --tail=80 backend)",
+      "Bash(node -e \"console.log\\('parsed OK keys:', Object.keys\\(JSON.parse\\(require\\('fs'\\).readFileSync\\('/Users/kylejohnson/code/TimeForge/backend/package.json','utf8'\\)\\)\\)\\)\")",
+      "Bash(docker-compose -f /Users/kylejohnson/code/TimeForge/docker-compose.dev.yml exec -T backend sh -c 'cat /app/package.json')",
+      "Bash(docker-compose -f /Users/kylejohnson/code/TimeForge/docker-compose.dev.yml logs backend)",
+      "Bash(xxd /Users/kylejohnson/code/TimeForge/backend/package.json)",
+      "Bash(docker-compose -f /Users/kylejohnson/code/TimeForge/docker-compose.dev.yml exec -T backend sh -c 'wc -c /app/package.json && file /app/package.json && xxd /app/package.json | head -2 && node -e \"JSON.parse\\(require\\(\\\\\"fs\\\\\"\\).readFileSync\\(\\\\\"/app/package.json\\\\\",\\\\\"utf8\\\\\"\\)\\); console.log\\(\\\\\"OK\\\\\"\\)\"')",
+      "Bash(docker-compose -f /Users/kylejohnson/code/TimeForge/docker-compose.dev.yml restart backend)",
+      "Bash(docker-compose -f /Users/kylejohnson/code/TimeForge/docker-compose.dev.yml exec -T backend sh -c 'wc -c /app/package.json')",
+      "Bash(docker-compose -f /Users/kylejohnson/code/TimeForge/docker-compose.dev.yml logs --tail=20 backend)",
+      "Bash(sqlite3 /Users/kylejohnson/code/TimeForge/data/db.sqlite \"SELECT MAX\\(batch\\) FROM knex_migrations;\")",
+      "Bash(sqlite3 /Users/kylejohnson/code/TimeForge/data/db.sqlite \"INSERT INTO knex_migrations \\(name, batch, migration_time\\) VALUES \\('20260503000003_backup_destinations.ts', 6, CURRENT_TIMESTAMP\\); SELECT name FROM knex_migrations ORDER BY id;\")",
+      "Bash(docker-compose -f /Users/kylejohnson/code/TimeForge/docker-compose.dev.yml logs --tail=15 backend)",
+      "Bash(docker-compose -f docker-compose.dev.yml logs --tail=15 backend)",
+      "Bash(docker-compose -f docker-compose.dev.yml logs --tail=8 backend)",
+      "Bash(git restore *)",
+      "Bash(git rm *)"
     ]
   }
 }
