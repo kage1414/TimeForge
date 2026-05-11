@@ -119,6 +119,8 @@ export default function InvoiceDetailPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [sendTo, setSendTo] = useState('');
   const [sendBody, setSendBody] = useState('');
+  const [sendCc, setSendCc] = useState('');
+  const [ccSelf, setCcSelf] = useState(false);
   const [attachPdf, setAttachPdf] = useState(true);
 
   const { data: invoice, isLoading } = useQuery<Invoice>({
@@ -196,10 +198,20 @@ export default function InvoiceDetailPage() {
   });
 
   const sendInvoice = useMutation({
-    mutationFn: async ({ to, body, attachPdf }: { to: string; body: string; attachPdf: boolean }) =>
+    mutationFn: async ({
+      to,
+      cc,
+      body,
+      attachPdf,
+    }: {
+      to: string;
+      cc: string[];
+      body: string;
+      attachPdf: boolean;
+    }) =>
       gql(
-        `mutation($id: Int!, $to: String!, $body: String, $attachPdf: Boolean) { sendInvoice(id: $id, to: $to, body: $body, attachPdf: $attachPdf) }`,
-        { id: Number(id), to, body: body || null, attachPdf },
+        `mutation($id: Int!, $to: String!, $cc: [String!], $body: String, $attachPdf: Boolean) { sendInvoice(id: $id, to: $to, cc: $cc, body: $body, attachPdf: $attachPdf) }`,
+        { id: Number(id), to, cc: cc.length ? cc : null, body: body || null, attachPdf },
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invoice', id] });
@@ -516,7 +528,14 @@ export default function InvoiceDetailPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              sendInvoice.mutate({ to: sendTo, body: sendBody, attachPdf });
+              const ccList = sendCc
+                .split(',')
+                .map((s) => s.trim())
+                .filter((s) => s.length > 0);
+              if (ccSelf && settings?.email && !ccList.includes(settings.email)) {
+                ccList.push(settings.email);
+              }
+              sendInvoice.mutate({ to: sendTo, cc: ccList, body: sendBody, attachPdf });
             }}
           >
             <TFDialogBody>
@@ -529,6 +548,29 @@ export default function InvoiceDetailPage() {
                   placeholder="client@example.com"
                 />
               </TFField>
+              <div className="mt-4">
+                <TFField
+                  label="CC"
+                  hint="Comma-separate multiple addresses."
+                >
+                  <TFInput
+                    type="text"
+                    value={sendCc}
+                    onChange={(e) => setSendCc(e.target.value)}
+                    placeholder="optional@example.com"
+                  />
+                </TFField>
+              </div>
+              {settings?.email && (
+                <div className="mt-2">
+                  <TFCheckbox
+                    id="cc-self"
+                    label={`CC me (${settings.email})`}
+                    checked={ccSelf}
+                    onChange={(e) => setCcSelf(e.target.checked)}
+                  />
+                </div>
+              )}
               <div className="mt-4">
                 <TFField label="Email Body">
                   <TFTextarea

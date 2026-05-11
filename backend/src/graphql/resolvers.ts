@@ -903,7 +903,7 @@ export const resolvers = {
       }
     },
 
-    sendInvoice: async (_: any, { id, to, body, attachPdf }: { id: number; to: string; body?: string; attachPdf?: boolean }, context: Context) => {
+    sendInvoice: async (_: any, { id, to, cc, body, attachPdf }: { id: number; to: string; cc?: string[] | null; body?: string; attachPdf?: boolean }, context: Context) => {
       const user = requireAuth(context);
       const settings = await db('user_settings').where('user_id', user.id).first();
       if (!settings?.smtp_host || !settings?.smtp_user || !settings?.smtp_pass) {
@@ -1002,12 +1002,16 @@ export const resolvers = {
         auth: { user: settings.smtp_user, pass: settings.smtp_pass },
       });
 
+      const ccList = (cc || [])
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
       const mailOptions: any = {
         from: `"${fromName}" <${fromEmail}>`,
         to,
         subject: `Invoice #${invoice.invoice_number} from ${fromName}`,
         html,
       };
+      if (ccList.length) mailOptions.cc = ccList;
 
       if (attachPdf) {
         const pdfFile = invoicePdfPath(invoice.user_id, invoice.client_id, invoice.id);
