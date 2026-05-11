@@ -75,7 +75,7 @@ function SidebarAccordion({
               const childActive =
                 location.pathname === child.path ||
                 (child.path !== "/" &&
-                  location.pathname.startsWith(child.path));
+                  location.pathname.startsWith(child.path + "/"));
               return (
                 <Link
                   key={child.path}
@@ -166,12 +166,20 @@ export default function App() {
     {
       path: "/settings",
       label: "Settings",
-      children: isAdmin
-        ? [
-            { path: "/settings", label: "Settings" },
-            { path: "/admin/invites", label: "Invites" },
-          ]
-        : [{ path: "/settings", label: "Settings" }],
+      children: [
+        { path: "/settings", label: "Profile" },
+        { path: "/settings/payment", label: "Payment" },
+        { path: "/settings/preferences", label: "Preferences" },
+        { path: "/settings/email", label: "Email" },
+        { path: "/settings/backups", label: "Backups" },
+        { path: "/settings/password", label: "Password" },
+        ...(isAdmin
+          ? [
+              { path: "/settings/users", label: "Users" },
+              { path: "/admin/invites", label: "Invites" },
+            ]
+          : []),
+      ],
     },
   ];
 
@@ -280,7 +288,7 @@ export default function App() {
               <Route path="/invoices/new" element={<CreateInvoicePage />} />
               <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
               <Route path="/import" element={<ImportPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings/*" element={<SettingsPage />} />
               <Route element={<AdminRoute />}>
                 <Route path="/admin/invites" element={<InvitesPage />} />
               </Route>
