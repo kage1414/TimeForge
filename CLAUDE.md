@@ -33,7 +33,7 @@ Full-stack invoicing and time-tracking application.
 
 ## Tech Stack
 
-- **Backend**: Node.js, Express, TypeScript, Apollo Server (GraphQL), Knex (query builder/migrations), PostgreSQL
+- **Backend**: Node.js, Express, TypeScript, Apollo Server (GraphQL), Knex (query builder/migrations), better-sqlite3 (single file at `DATABASE_PATH`)
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, TanStack React Query, React Router, react-hot-toast
 - **Package Manager**: Yarn
 - **Deployment**: Docker Compose (production + dev with hot reload)
@@ -172,8 +172,7 @@ Single endpoint at `/graphql` (Apollo Server).
 
 ## Environment Variables
 
-- `DATABASE_URL` - PostgreSQL connection string (default: postgresql://postgres:postgres@db:5432/invoicer)
-- `DATABASE_PATH` - SQLite path (containers default to `/data/db.sqlite`)
+- `DATABASE_PATH` - SQLite path (containers default to `/data/db.sqlite`; locally falls back to `os.tmpdir()/timeforge/db.sqlite` per `knexfile.ts`)
 - `EXPORT_DIR` - Where invoice export PDFs/CSVs are written (containers default to `/data/exports`)
 - `PUPPETEER_EXECUTABLE_PATH` - Chromium binary path used by puppeteer (`/usr/bin/chromium-browser` in the alpine images)
 - `PORT` - Backend port (default: 4000)
