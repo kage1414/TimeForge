@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import { gql } from '../api/client';
-import { Client } from '../types';
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { gql } from "../api/client";
+import { Client } from "../types";
 import {
   TFBadge,
   TFButton,
@@ -27,14 +27,23 @@ import {
   TFTh,
   TFTHead,
   TFTr,
-} from '../components/tf';
+} from "../components/tf";
 
 const CLIENTS_QUERY = `query { clients { id name company email address1 address2 city state zip phone default_email_template is_active created_at updated_at } }`;
 
-function EditClientModal({ client, onClose }: { client: Partial<Client>; onClose: () => void }) {
+function EditClientModal({
+  client,
+  onClose,
+}: {
+  client: Partial<Client>;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
-  const [form, setForm] = useState<Partial<Client>>({ is_active: true, ...client });
-  const [validationError, setValidationError] = useState('');
+  const [form, setForm] = useState<Partial<Client>>({
+    is_active: true,
+    ...client,
+  });
+  const [validationError, setValidationError] = useState("");
 
   const save = useMutation({
     mutationFn: (c: Partial<Client>) => {
@@ -52,41 +61,49 @@ function EditClientModal({ client, onClose }: { client: Partial<Client>; onClose
         ...(c.id ? { is_active: c.is_active } : {}),
       };
       if (c.id) {
-        return gql(`mutation($id: Int!, $input: UpdateClientInput!) { updateClient(id: $id, input: $input) { id } }`,
-          { id: c.id, input });
+        return gql(
+          `mutation($id: Int!, $input: UpdateClientInput!) { updateClient(id: $id, input: $input) { id } }`,
+          { id: c.id, input },
+        );
       }
-      return gql(`mutation($input: CreateClientInput!) { createClient(input: $input) { id } }`, { input });
+      return gql(
+        `mutation($input: CreateClientInput!) { createClient(input: $input) { id } }`,
+        { input },
+      );
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['clients'] });
-      toast.success('Client saved');
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Client saved");
       onClose();
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const set = (field: keyof Client, value: any) => setForm((f) => ({ ...f, [field]: value }));
+  const set = (field: keyof Client, value: any) =>
+    setForm((f) => ({ ...f, [field]: value }));
 
   return (
     <TFDialog open onOpenChange={(o) => !o && onClose()}>
       <TFDialogContent size="lg">
         <TFDialogHeader>
           <div className="flex items-center justify-between w-full">
-            <TFDialogTitle>{form.id ? 'Edit Client' : 'New Client'}</TFDialogTitle>
+            <TFDialogTitle>
+              {form.id ? "Edit Client" : "New Client"}
+            </TFDialogTitle>
             {form.id && (
               <button
                 type="button"
-                onClick={() => set('is_active', !form.is_active)}
+                onClick={() => set("is_active", !form.is_active)}
                 className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                   form.is_active
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    ? "bg-green-100 text-green-700 hover:bg-green-200"
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                 }`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full ${form.is_active ? 'bg-green-500' : 'bg-gray-400'}`}
+                  className={`w-2 h-2 rounded-full ${form.is_active ? "bg-green-500" : "bg-gray-400"}`}
                 />
-                {form.is_active ? 'Active' : 'Inactive'}
+                {form.is_active ? "Active" : "Inactive"}
               </button>
             )}
           </div>
@@ -96,58 +113,103 @@ function EditClientModal({ client, onClose }: { client: Partial<Client>; onClose
             <TFField
               label={
                 <>
-                  Name <span className="text-gray-400 font-normal">(or company required)</span>
+                  Name{" "}
+                  <span className="text-gray-400 font-normal">
+                    (or company required)
+                  </span>
                 </>
               }
             >
-              <TFInput value={form.name || ''} onChange={(e) => set('name', e.target.value)} />
+              <TFInput
+                value={form.name || ""}
+                onChange={(e) => set("name", e.target.value)}
+              />
             </TFField>
             <TFField
               label={
                 <>
-                  Company <span className="text-gray-400 font-normal">(or name required)</span>
+                  Company{" "}
+                  <span className="text-gray-400 font-normal">
+                    (or name required)
+                  </span>
                 </>
               }
             >
-              <TFInput value={form.company || ''} onChange={(e) => set('company', e.target.value)} />
+              <TFInput
+                value={form.company || ""}
+                onChange={(e) => set("company", e.target.value)}
+              />
             </TFField>
             <TFField label="Email">
-              <TFInput type="email" value={form.email || ''} onChange={(e) => set('email', e.target.value)} />
+              <TFInput
+                type="email"
+                value={form.email || ""}
+                onChange={(e) => set("email", e.target.value)}
+              />
             </TFField>
             <TFField label="Phone">
-              <TFInput value={form.phone || ''} onChange={(e) => set('phone', e.target.value)} />
+              <TFInput
+                value={form.phone || ""}
+                onChange={(e) => set("phone", e.target.value)}
+              />
             </TFField>
             <TFField label="Address Line 1">
-              <TFInput value={form.address1 || ''} onChange={(e) => set('address1', e.target.value)} />
+              <TFInput
+                value={form.address1 || ""}
+                onChange={(e) => set("address1", e.target.value)}
+              />
             </TFField>
             <TFField label="Address Line 2">
-              <TFInput value={form.address2 || ''} onChange={(e) => set('address2', e.target.value)} />
+              <TFInput
+                value={form.address2 || ""}
+                onChange={(e) => set("address2", e.target.value)}
+              />
             </TFField>
             <TFField label="City">
-              <TFInput value={form.city || ''} onChange={(e) => set('city', e.target.value)} />
+              <TFInput
+                value={form.city || ""}
+                onChange={(e) => set("city", e.target.value)}
+              />
             </TFField>
             <TFField label="State">
-              <TFInput value={form.state || ''} onChange={(e) => set('state', e.target.value)} />
+              <TFInput
+                value={form.state || ""}
+                onChange={(e) => set("state", e.target.value)}
+              />
             </TFField>
             <TFField label="Zip">
-              <TFInput value={form.zip || ''} onChange={(e) => set('zip', e.target.value)} />
+              <TFInput
+                value={form.zip || ""}
+                onChange={(e) => set("zip", e.target.value)}
+              />
             </TFField>
             <TFField
               label="Email Template"
               className="md:col-span-2"
               hint={
                 <>
-                  Overrides the user-level default when sending invoices to this client.
-                  Variables: {'{{client_name}}'}, {'{{client_first_name}}'},{' '}
-                  {'{{client_last_name}}'}, {'{{invoice_number}}'}, {'{{total}}'},{' '}
-                  {'{{due_date}}'}, {'{{your_name}}'}.
+                  Available variables:
+                  <br />
+                  {"{{client_name}}"}
+                  <br />
+                  {"{{client_first_name}}"}
+                  <br />
+                  {"{{client_last_name}}"}
+                  <br />
+                  {"{{invoice_number}}"}
+                  <br />
+                  {"{{total}}"}
+                  <br />
+                  {"{{due_date}}"}
+                  <br />
+                  {"{{your_name}}"}
                 </>
               }
             >
               <TFTextarea
                 className="h-32 font-mono"
-                value={form.default_email_template || ''}
-                onChange={(e) => set('default_email_template', e.target.value)}
+                value={form.default_email_template || ""}
+                onChange={(e) => set("default_email_template", e.target.value)}
                 placeholder="Leave blank to use the default in Settings"
               />
             </TFField>
@@ -165,10 +227,10 @@ function EditClientModal({ client, onClose }: { client: Partial<Client>; onClose
           <TFButton
             onClick={() => {
               if (!form.name && !form.company) {
-                setValidationError('A name or company is required.');
+                setValidationError("A name or company is required.");
                 return;
               }
-              setValidationError('');
+              setValidationError("");
               save.mutate(form);
             }}
             disabled={save.isPending}
@@ -184,8 +246,9 @@ function EditClientModal({ client, onClose }: { client: Partial<Client>; onClose
 export default function ClientsPage() {
   const qc = useQueryClient();
   const { data: clients = [], isLoading } = useQuery<Client[]>({
-    queryKey: ['clients'],
-    queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
+    queryKey: ["clients"],
+    queryFn: async () =>
+      (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
   const [editing, setEditing] = useState<Partial<Client> | null>(null);
@@ -193,14 +256,17 @@ export default function ClientsPage() {
   const [showInactive, setShowInactive] = useState(false);
 
   const remove = useMutation({
-    mutationFn: (id: number) => gql(`mutation($id: Int!) { deleteClient(id: $id) }`, { id }),
+    mutationFn: (id: number) =>
+      gql(`mutation($id: Int!) { deleteClient(id: $id) }`, { id }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['clients'] });
-      toast.success('Client deleted');
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      toast.success("Client deleted");
     },
   });
 
-  const visibleClients = showInactive ? clients : clients.filter((c) => c.is_active !== false);
+  const visibleClients = showInactive
+    ? clients
+    : clients.filter((c) => c.is_active !== false);
 
   if (isLoading) return <TFLoading />;
 
@@ -219,15 +285,15 @@ export default function ClientsPage() {
             <TFButton
               onClick={() =>
                 setEditing({
-                  name: '',
-                  company: '',
-                  email: '',
-                  address1: '',
-                  address2: '',
-                  city: '',
-                  state: '',
-                  zip: '',
-                  phone: '',
+                  name: "",
+                  company: "",
+                  email: "",
+                  address1: "",
+                  address2: "",
+                  city: "",
+                  state: "",
+                  zip: "",
+                  phone: "",
                 })
               }
             >
@@ -250,17 +316,24 @@ export default function ClientsPage() {
           </TFTHead>
           <TFTBody>
             {visibleClients.map((c) => (
-              <TFTr key={c.id} className={c.is_active === false ? 'opacity-50' : ''}>
+              <TFTr
+                key={c.id}
+                className={c.is_active === false ? "opacity-50" : ""}
+              >
                 <TFTd className="font-medium">{c.name || c.company}</TFTd>
                 <TFTd>{c.email}</TFTd>
                 <TFTd>{c.phone}</TFTd>
                 <TFTd>
-                  <TFBadge tone={c.is_active !== false ? 'success' : 'neutral'}>
-                    {c.is_active !== false ? 'Active' : 'Inactive'}
+                  <TFBadge tone={c.is_active !== false ? "success" : "neutral"}>
+                    {c.is_active !== false ? "Active" : "Inactive"}
                   </TFBadge>
                 </TFTd>
                 <TFTd>
-                  <TFButton variant="link" size="sm" onClick={() => setEditing(c)}>
+                  <TFButton
+                    variant="link"
+                    size="sm"
+                    onClick={() => setEditing(c)}
+                  >
                     Edit
                   </TFButton>
                   <TFButton
@@ -285,7 +358,9 @@ export default function ClientsPage() {
         </TFTable>
       </TFCard>
 
-      {editing && <EditClientModal client={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <EditClientModal client={editing} onClose={() => setEditing(null)} />
+      )}
 
       <TFConfirm
         open={confirmDeleteId !== null}
