@@ -129,6 +129,7 @@ export interface UserSettings {
   show_earnings_on_timer: boolean;
   resume_window_minutes: number;
   consolidate_hours: boolean;
+  default_rate: number | null;
   updated_at: string;
 }
 

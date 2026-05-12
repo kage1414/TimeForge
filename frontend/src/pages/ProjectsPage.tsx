@@ -31,6 +31,7 @@ import {
 
 const PROJECTS_QUERY = `query { projects { id client_id client_name name description default_rate is_active created_at updated_at } }`;
 const CLIENTS_QUERY = `query { clients { id name company } }`;
+const USER_DEFAULT_RATE_QUERY = `query { userSettings { default_rate } }`;
 
 interface ProjectForm {
   client_id: string;
@@ -40,21 +41,25 @@ interface ProjectForm {
   is_active: boolean;
 }
 
-const emptyForm: ProjectForm = {
-  client_id: '',
-  name: '',
-  description: '',
-  default_rate: '85',
-  is_active: true,
-};
+function makeEmptyForm(defaultRate: number | null | undefined): ProjectForm {
+  return {
+    client_id: '',
+    name: '',
+    description: '',
+    default_rate: defaultRate != null ? String(defaultRate) : '',
+    is_active: true,
+  };
+}
 
 function EditProjectModal({
   project,
   clients,
+  userDefaultRate,
   onClose,
 }: {
   project: Project | null;
   clients: Client[];
+  userDefaultRate: number | null;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
@@ -67,7 +72,7 @@ function EditProjectModal({
           default_rate: String(project.default_rate),
           is_active: project.is_active,
         }
-      : emptyForm,
+      : makeEmptyForm(userDefaultRate),
   );
 
   const set = <K extends keyof ProjectForm>(field: K, value: ProjectForm[K]) =>
@@ -189,6 +194,16 @@ export default function ProjectsPage() {
     queryFn: async () => (await gql<{ clients: Client[] }>(CLIENTS_QUERY)).clients,
   });
 
+  const { data: userDefaultRate = null } = useQuery<number | null>({
+    queryKey: ['userSettings', 'default_rate'],
+    queryFn: async () => {
+      const r = await gql<{ userSettings: { default_rate: number | null } }>(
+        USER_DEFAULT_RATE_QUERY,
+      );
+      return r.userSettings.default_rate;
+    },
+  });
+
   const remove = useMutation({
     mutationFn: (id: number) => gql(`mutation($id: Int!) { deleteProject(id: $id) }`, { id }),
     onSuccess: () => {
@@ -263,7 +278,12 @@ export default function ProjectsPage() {
       )}
 
       {editing !== undefined && (
-        <EditProjectModal project={editing} clients={clients} onClose={() => setEditing(undefined)} />
+        <EditProjectModal
+          project={editing}
+          clients={clients}
+          userDefaultRate={userDefaultRate}
+          onClose={() => setEditing(undefined)}
+        />
       )}
 
       <TFConfirm

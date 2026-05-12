@@ -140,6 +140,7 @@ export const typeDefs = `#graphql
     show_earnings_on_timer: Boolean
     resume_window_minutes: Int
     consolidate_hours: Boolean
+    default_rate: Float
     updated_at: String!
   }
 
@@ -170,6 +171,7 @@ export const typeDefs = `#graphql
     show_earnings_on_timer: Boolean
     resume_window_minutes: Int
     consolidate_hours: Boolean
+    default_rate: Float
   }
 
   type User {
