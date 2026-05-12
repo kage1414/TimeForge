@@ -9,6 +9,7 @@ import { isBackupEncryptionConfigured } from '../backup/encryption';
 import {
   BackupDestinationRow,
   BackupProvider,
+  decryptProviderConfig,
   downloadBackupFromDestination,
   encryptProviderConfig,
   ensureBackupReady,
@@ -86,7 +87,6 @@ function toBackupDestinationGql(row: BackupDestinationRow) {
   // Surface non-secret fields for editing UX. We never decrypt secrets to the client.
   try {
     if (!isBackupEncryptionConfigured()) return base;
-    const { decryptProviderConfig } = require('../backup/run') as typeof import('../backup/run');
     const decoded = decryptProviderConfig(row);
     if (decoded.provider === 's3') {
       base.s3_endpoint = decoded.config.endpoint || null;
@@ -1187,10 +1187,31 @@ export const resolvers = {
       if (!existing) throw new Error('Backup destination not found');
       const update: any = { updated_at: db.fn.now() };
       if (typeof input.name === 'string') update.name = input.name;
+      // Preserve the existing secret when the user leaves the secret/password
+      // blank in the edit form (the UI hints "leave blank to keep"). Without
+      // this merge, every edit — including a pure schedule change — would
+      // re-encrypt the row with an empty secret and fail validation.
       if (existing.provider === 's3' && input.s3) {
-        update.config_encrypted = encryptProviderConfig({ provider: 's3', config: input.s3 });
+        let s3Config = input.s3;
+        if (!s3Config.secret_access_key) {
+          const existingCfg = decryptProviderConfig(existing);
+          if (existingCfg.provider === 's3') {
+            s3Config = {
+              ...s3Config,
+              secret_access_key: existingCfg.config.secret_access_key,
+            };
+          }
+        }
+        update.config_encrypted = encryptProviderConfig({ provider: 's3', config: s3Config });
       } else if (existing.provider === 'nextcloud' && input.nextcloud) {
-        update.config_encrypted = encryptProviderConfig({ provider: 'nextcloud', config: input.nextcloud });
+        let ncConfig = input.nextcloud;
+        if (!ncConfig.password) {
+          const existingCfg = decryptProviderConfig(existing);
+          if (existingCfg.provider === 'nextcloud') {
+            ncConfig = { ...ncConfig, password: existingCfg.config.password };
+          }
+        }
+        update.config_encrypted = encryptProviderConfig({ provider: 'nextcloud', config: ncConfig });
       }
       const scheduleChanged = applyScheduleInput(update, input.schedule);
       const [row] = await db('backup_destinations')
