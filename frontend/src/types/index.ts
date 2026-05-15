@@ -70,7 +70,7 @@ export interface Invoice {
   total: number;
   notes: string;
   payment_method?: string | null;
-  consolidate_hours?: boolean;
+  consolidated: boolean;
   export_status: 'pending' | 'generating' | 'ready' | 'failed';
   export_error?: string | null;
   export_generated_at?: string | null;
@@ -129,7 +129,6 @@ export interface UserSettings {
   default_email_template: string | null;
   show_earnings_on_timer: boolean;
   resume_window_minutes: number;
-  consolidate_hours: boolean;
   default_rate: number | null;
   updated_at: string;
 }

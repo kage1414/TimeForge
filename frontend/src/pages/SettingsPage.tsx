@@ -43,7 +43,7 @@ function sectionFromPath(pathname: string): string {
 }
 
 const SETTINGS_FIELDS =
-  "id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template show_earnings_on_timer resume_window_minutes consolidate_hours default_rate";
+  "id company first_name last_name email address1 address2 city state zip phone venmo cashapp paypal zelle default_due_days smtp_host smtp_port smtp_user smtp_pass smtp_secure smtp_from_email smtp_from_name default_email_template show_earnings_on_timer resume_window_minutes default_rate";
 
 const SETTINGS_QUERY = `query { userSettings { ${SETTINGS_FIELDS} } }`;
 
@@ -83,7 +83,6 @@ export default function SettingsPage() {
   const [emailTemplate, setEmailTemplate] = useState("");
   const [showEarningsOnTimer, setShowEarningsOnTimer] = useState(false);
   const [resumeWindowMinutes, setResumeWindowMinutes] = useState("60");
-  const [consolidateHours, setConsolidateHours] = useState(false);
   const [defaultRate, setDefaultRate] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -128,7 +127,6 @@ export default function SettingsPage() {
       setEmailTemplate(settings.default_email_template || "");
       setShowEarningsOnTimer(settings.show_earnings_on_timer ?? false);
       setResumeWindowMinutes(String(settings.resume_window_minutes ?? 60));
-      setConsolidateHours(settings.consolidate_hours ?? false);
       setDefaultRate(
         settings.default_rate != null ? String(settings.default_rate) : "",
       );
@@ -166,7 +164,6 @@ export default function SettingsPage() {
           resume_window_minutes: resumeWindowMinutes
             ? Math.max(1, Math.floor(Number(resumeWindowMinutes)))
             : 60,
-          consolidate_hours: consolidateHours,
           default_rate:
             defaultRate.trim() === "" ? null : Number(defaultRate),
         },
@@ -419,15 +416,6 @@ export default function SettingsPage() {
                     onChange={(e) => setDefaultRate(e.target.value)}
                   />
                 </TFField>
-              </div>
-              <div className="mt-4">
-                <TFCheckbox
-                  id="consolidate-hours"
-                  label="Consolidate hours"
-                  description="When creating an invoice, merge time entries on the same day (same project and rate) into a single line item."
-                  checked={consolidateHours}
-                  onChange={(e) => setConsolidateHours(e.target.checked)}
-                />
               </div>
               <div className="mt-4">
                 <TFField

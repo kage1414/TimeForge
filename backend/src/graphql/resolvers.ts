@@ -161,6 +161,98 @@ function effectiveRate(
   return user_default;
 }
 
+function formatEntryDateLabel(t: string | null): string | null {
+  if (!t) return null;
+  return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+interface ProjectGroup {
+  project_name: string;
+  rate: number;
+  total_minutes: number;
+  // Date label -> first ISO start_time seen for that label, for chronological sort.
+  dateLabels: Map<string, string>;
+}
+
+function projectGroupKey(projectId: number, rate: number): string {
+  return `${projectId}|${rate}`;
+}
+
+function consolidatedLineItemDescription(group: ProjectGroup): string {
+  const entries = Array.from(group.dateLabels.entries());
+  entries.sort((a, b) => a[1].localeCompare(b[1]));
+  const dates = entries.map(([label]) => label);
+  return dates.length ? `${group.project_name}\n${dates.join(', ')}` : group.project_name;
+}
+
+function addEntryToProjectGroup(
+  groups: Map<string, ProjectGroup>,
+  projectId: number,
+  projectName: string,
+  rate: number,
+  durationMinutes: number,
+  startTime: string | null,
+): void {
+  const key = projectGroupKey(projectId, rate);
+  const dateLabel = formatEntryDateLabel(startTime);
+  let group = groups.get(key);
+  if (!group) {
+    group = {
+      project_name: projectName,
+      rate,
+      total_minutes: 0,
+      dateLabels: new Map(),
+    };
+    groups.set(key, group);
+  }
+  group.total_minutes += durationMinutes;
+  if (dateLabel && !group.dateLabels.has(dateLabel)) {
+    group.dateLabels.set(dateLabel, startTime || '');
+  }
+}
+
+async function rebuildConsolidatedLineItems(
+  invoiceId: number,
+  userId: number,
+  userDefaultRate: number,
+): Promise<void> {
+  await db('invoice_line_items')
+    .where({ invoice_id: invoiceId })
+    .whereNull('time_entry_id')
+    .del();
+  const remaining = await db('time_entries')
+    .join('projects', 'time_entries.project_id', 'projects.id')
+    .select('time_entries.*', 'projects.default_rate', 'projects.name as project_name')
+    .where('time_entries.invoice_id', invoiceId)
+    .where('time_entries.user_id', userId)
+    .whereNull('time_entries.flat_amount');
+  const groups = new Map<string, ProjectGroup>();
+  for (const e of remaining) {
+    const rate = effectiveRate(e.rate_override, e.default_rate, userDefaultRate);
+    addEntryToProjectGroup(
+      groups,
+      e.project_id,
+      e.project_name,
+      rate,
+      Number(e.duration_minutes || 0),
+      e.start_time || null,
+    );
+  }
+  for (const group of groups.values()) {
+    const hours = group.total_minutes / 60;
+    const quantity = parseFloat(hours.toFixed(2));
+    const amount = hours * group.rate;
+    await db('invoice_line_items').insert({
+      invoice_id: invoiceId,
+      description: consolidatedLineItemDescription(group),
+      quantity,
+      rate: group.rate,
+      amount: parseFloat(amount.toFixed(2)),
+      time_entry_id: null,
+    });
+  }
+}
+
 export const resolvers = {
   TimeEntry: {
     start_time: (e: any) => toISO(e.start_time),
@@ -181,6 +273,7 @@ export const resolvers = {
     created_at: (e: any) => toISO(e.created_at),
     updated_at: (e: any) => toISO(e.updated_at),
     export_generated_at: (e: any) => toISO(e.export_generated_at),
+    consolidated: (e: any) => !!e.consolidated,
   },
   Client: {
     created_at: (e: any) => toISO(e.created_at),
@@ -641,54 +734,9 @@ export const resolvers = {
         .update({ invoice_id: null, updated_at: db.fn.now() })
         .returning('*');
 
-      if (invoice?.consolidate_hours) {
-        await db('invoice_line_items')
-          .where({ invoice_id: invoice.id })
-          .whereNull('time_entry_id')
-          .del();
-        const remaining = await db('time_entries')
-          .join('projects', 'time_entries.project_id', 'projects.id')
-          .select('time_entries.*', 'projects.default_rate', 'projects.name as project_name')
-          .where('time_entries.invoice_id', invoice.id)
-          .where('time_entries.user_id', user.id)
-          .whereNull('time_entries.flat_amount');
+      if (invoice && !!invoice.consolidated) {
         const userDefaultRate = await getUserDefaultRate(user.id);
-        const groups = new Map<string, { project_name: string; date: string | null; rate: number; total_minutes: number; descriptions: string[] }>();
-        for (const e of remaining) {
-          const entryDate = e.start_time
-            ? new Date(e.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : null;
-          const rate = effectiveRate(e.rate_override, e.default_rate, userDefaultRate);
-          const key = `${e.project_id}|${entryDate ?? ''}|${rate}`;
-          const existing = groups.get(key);
-          if (existing) {
-            existing.total_minutes += Number(e.duration_minutes || 0);
-            if (e.description) existing.descriptions.push(e.description);
-          } else {
-            groups.set(key, {
-              project_name: e.project_name,
-              date: entryDate,
-              rate,
-              total_minutes: Number(e.duration_minutes || 0),
-              descriptions: e.description ? [e.description] : [],
-            });
-          }
-        }
-        for (const group of groups.values()) {
-          const hours = group.total_minutes / 60;
-          const quantity = parseFloat(hours.toFixed(2));
-          const amount = hours * group.rate;
-          const descPrefix = group.date ? `${group.project_name} - ${group.date}` : group.project_name;
-          const descBody = group.descriptions.length ? '\n' + group.descriptions.map((d) => `- ${d}`).join('\n') : '';
-          await db('invoice_line_items').insert({
-            invoice_id: invoice.id,
-            description: `${descPrefix}${descBody}`,
-            quantity,
-            rate: group.rate,
-            amount: parseFloat(amount.toFixed(2)),
-            time_entry_id: null,
-          });
-        }
+        await rebuildConsolidatedLineItems(invoice.id, user.id, userDefaultRate);
       }
 
       if (invoice) {
@@ -747,7 +795,7 @@ export const resolvers = {
       const { client_id, invoice_number: customNumber, issue_date, due_date, tax_rate, notes, time_entry_ids, credit_ids, credit_time_entry_ids } = input;
 
       const settings = await db('user_settings').where('user_id', user.id).first();
-      const consolidate = !!settings?.consolidate_hours;
+      const consolidated = !!input.consolidated;
       const userDefaultRate = Number(settings?.default_rate) > 0 ? Number(settings.default_rate) : 0;
 
       let invoice_number: string;
@@ -774,7 +822,7 @@ export const resolvers = {
           due_date: due_date || new Date(Date.now() + 30 * 86400000).toISOString(),
           tax_rate: tax_rate || 0,
           notes,
-          consolidate_hours: consolidate,
+          consolidated,
         })
         .returning('*');
 
@@ -787,12 +835,10 @@ export const resolvers = {
           .whereIn('time_entries.id', time_entry_ids)
           .where('time_entries.user_id', user.id);
 
-        const hourlyGroups = new Map<string, { project_name: string; date: string | null; rate: number; total_minutes: number; descriptions: string[] }>();
+        const projectGroups = new Map<string, ProjectGroup>();
 
         for (const entry of entries) {
-          const entryDate = entry.start_time
-            ? new Date(entry.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : null;
+          const entryDate = formatEntryDateLabel(entry.start_time);
 
           if (entry.flat_amount != null) {
             const fmtUtc = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
@@ -813,21 +859,15 @@ export const resolvers = {
             subtotal += amount;
           } else {
             const rate = effectiveRate(entry.rate_override, entry.default_rate, userDefaultRate);
-            if (consolidate) {
-              const key = `${entry.project_id}|${entryDate ?? ''}|${rate}`;
-              const existing = hourlyGroups.get(key);
-              if (existing) {
-                existing.total_minutes += Number(entry.duration_minutes || 0);
-                if (entry.description) existing.descriptions.push(entry.description);
-              } else {
-                hourlyGroups.set(key, {
-                  project_name: entry.project_name,
-                  date: entryDate,
-                  rate,
-                  total_minutes: Number(entry.duration_minutes || 0),
-                  descriptions: entry.description ? [entry.description] : [],
-                });
-              }
+            if (consolidated) {
+              addEntryToProjectGroup(
+                projectGroups,
+                entry.project_id,
+                entry.project_name,
+                rate,
+                Number(entry.duration_minutes || 0),
+                entry.start_time || null,
+              );
             } else {
               const hours = (entry.duration_minutes || 0) / 60;
               const quantity = parseFloat(hours.toFixed(2));
@@ -849,16 +889,14 @@ export const resolvers = {
           await db('time_entries').where('id', entry.id).update({ invoice_id: invoice.id });
         }
 
-        if (consolidate) {
-          for (const group of hourlyGroups.values()) {
+        if (consolidated) {
+          for (const group of projectGroups.values()) {
             const hours = group.total_minutes / 60;
             const quantity = parseFloat(hours.toFixed(2));
             const amount = hours * group.rate;
-            const descPrefix = group.date ? `${group.project_name} - ${group.date}` : group.project_name;
-            const descBody = group.descriptions.length ? '\n' + group.descriptions.map((d) => `- ${d}`).join('\n') : '';
             await db('invoice_line_items').insert({
               invoice_id: invoice.id,
-              description: `${descPrefix}${descBody}`,
+              description: consolidatedLineItemDescription(group),
               quantity,
               rate: group.rate,
               amount: parseFloat(amount.toFixed(2)),

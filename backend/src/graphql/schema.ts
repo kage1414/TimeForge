@@ -93,7 +93,7 @@ export const typeDefs = `#graphql
     total: Float!
     notes: String
     payment_method: String
-    consolidate_hours: Boolean!
+    consolidated: Boolean!
     export_status: String!
     export_error: String
     export_generated_at: String
@@ -140,7 +140,6 @@ export const typeDefs = `#graphql
     default_email_template: String
     show_earnings_on_timer: Boolean
     resume_window_minutes: Int
-    consolidate_hours: Boolean
     default_rate: Float
     updated_at: String!
   }
@@ -171,7 +170,6 @@ export const typeDefs = `#graphql
     default_email_template: String
     show_earnings_on_timer: Boolean
     resume_window_minutes: Int
-    consolidate_hours: Boolean
     default_rate: Float
   }
 
@@ -411,6 +409,7 @@ export const typeDefs = `#graphql
     time_entry_ids: [Int!]
     credit_ids: [Int!]
     credit_time_entry_ids: [Int!]
+    consolidated: Boolean
   }
 
   input CreateCreditInput {

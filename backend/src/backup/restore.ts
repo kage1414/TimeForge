@@ -83,10 +83,21 @@ export async function restoreUserBackup(
 
   // Defensively force export_status back to 'pending' so PDF/CSV gets regenerated
   // on disk under this server's EXPORT_DIR (the old files don't exist here yet).
-  for (const inv of invoices) {
+  // Also map the retired `consolidate_hours` boolean onto the new `consolidated`
+  // column for backups taken before the consolidation migration.
+  for (const inv of invoices as any[]) {
     inv.export_status = 'pending';
     inv.export_error = null;
     inv.export_generated_at = null;
+    if ('consolidate_hours' in inv) {
+      if (inv.consolidated == null) {
+        inv.consolidated = !!inv.consolidate_hours;
+      }
+      delete inv.consolidate_hours;
+    }
+  }
+  if (userSettings && 'consolidate_hours' in (userSettings as any)) {
+    delete (userSettings as any).consolidate_hours;
   }
 
   await db.transaction(async (trx) => {

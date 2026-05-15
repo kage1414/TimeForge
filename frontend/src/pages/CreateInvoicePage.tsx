@@ -46,6 +46,7 @@ export default function CreateInvoicePage() {
   const [taxRate, setTaxRate] = useState('0');
   const [notes, setNotes] = useState('');
   const [dueInDays, setDueInDays] = useState('');
+  const [consolidated, setConsolidated] = useState(false);
   const [entryActions, setEntryActions] = useState<Map<number, EntryAction>>(new Map());
   const [billedCredits, setBilledCredits] = useState<Set<number>>(new Set());
 
@@ -116,6 +117,7 @@ export default function CreateInvoicePage() {
             notes: notes || null,
             time_entry_ids: billIds,
             credit_time_entry_ids: [...creditUnbilledIds, ...Array.from(billedCredits)],
+            consolidated,
           },
         },
       );
@@ -253,13 +255,24 @@ export default function CreateInvoicePage() {
       {clientId && (
         <>
           <TFCard className="mb-6">
-            <div className="flex justify-between items-center mb-3">
+            <div className="flex justify-between items-center mb-3 gap-4">
               <h2 className="font-semibold">Unbilled Time Entries</h2>
-              {unbilledEntries.length > 0 && (
-                <TFButton variant="link" size="sm" onClick={selectAllBill}>
-                  Bill All
-                </TFButton>
-              )}
+              <div className="flex items-center gap-4">
+                {unbilledEntries.length > 0 && (
+                  <TFCheckbox
+                    id="consolidate-entries"
+                    label="Consolidate by project"
+                    description="Roll hourly entries up to one line per project (per rate), listing every date worked."
+                    checked={consolidated}
+                    onChange={(e) => setConsolidated(e.target.checked)}
+                  />
+                )}
+                {unbilledEntries.length > 0 && (
+                  <TFButton variant="link" size="sm" onClick={selectAllBill}>
+                    Bill All
+                  </TFButton>
+                )}
+              </div>
             </div>
             {unbilledEntries.length === 0 ? (
               <p className="text-gray-500 text-sm">No unbilled time entries for this client.</p>
