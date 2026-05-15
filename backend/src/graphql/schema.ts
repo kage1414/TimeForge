@@ -35,6 +35,7 @@ export const typeDefs = `#graphql
     client_name: String
     client_id: Int
     default_rate: Float
+    effective_rate: Float
     description: String
     start_time: String
     end_time: String

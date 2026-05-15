@@ -34,6 +34,7 @@ export interface TimeEntry {
   client_name: string;
   client_id: number;
   default_rate: number;
+  effective_rate: number | null;
   description: string;
   start_time: string | null;
   end_time: string | null;

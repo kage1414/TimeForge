@@ -139,6 +139,17 @@ async function getUserDefaultRate(userId: number): Promise<number> {
   return Number.isFinite(v) && v > 0 ? v : 0;
 }
 
+const userDefaultRateByContext = new WeakMap<Context, Promise<number>>();
+function getUserDefaultRateForContext(context: Context): Promise<number> {
+  if (!context.user) return Promise.resolve(0);
+  let p = userDefaultRateByContext.get(context);
+  if (!p) {
+    p = getUserDefaultRate(context.user.id);
+    userDefaultRateByContext.set(context, p);
+  }
+  return p;
+}
+
 function effectiveRate(
   rate_override: number | null | undefined,
   project_default: number | null | undefined,
@@ -156,6 +167,13 @@ export const resolvers = {
     end_time: (e: any) => toISO(e.end_time),
     created_at: (e: any) => toISO(e.created_at),
     updated_at: (e: any) => toISO(e.updated_at),
+    effective_rate: async (e: any, _: any, context: Context) => {
+      if (e.flat_amount != null) return null;
+      if (e.rate_override != null) return Number(e.rate_override);
+      const projectRate = Number(e.default_rate || 0);
+      if (projectRate > 0) return projectRate;
+      return await getUserDefaultRateForContext(context);
+    },
   },
   Invoice: {
     issue_date: (e: any) => toISO(e.issue_date),
