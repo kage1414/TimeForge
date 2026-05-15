@@ -75,7 +75,7 @@ function toLocalDatetime(iso: string): string {
 const TIME_ENTRIES_QUERY = `
   query($project_id: Int, $unbilled: Boolean) {
     timeEntries(project_id: $project_id, unbilled: $unbilled) {
-      id project_id project_name client_name client_id default_rate
+      id project_id project_name client_name client_id default_rate effective_rate
       description start_time end_time duration_minutes is_billable
       invoice_id rate_override flat_amount created_at updated_at
     }
@@ -394,7 +394,7 @@ export default function TimeEntriesPage() {
                 <span className="ml-3">
                   <ElapsedTime
                     startTime={e.start_time ?? new Date().toISOString()}
-                    rate={e.rate_override ?? e.default_rate}
+                    rate={e.effective_rate ?? 0}
                     showEarnings={userSettings?.show_earnings_on_timer}
                   />
                 </span>
@@ -464,7 +464,7 @@ export default function TimeEntriesPage() {
                   )
                   .map((e) => {
                     const isFlat = e.flat_amount != null;
-                    const rate = e.rate_override ?? e.default_rate;
+                    const rate = e.effective_rate ?? 0;
                     const amount = isFlat
                       ? Number(e.flat_amount)
                       : (e.duration_minutes / 60) * Number(rate);
@@ -562,7 +562,7 @@ export default function TimeEntriesPage() {
               )
               .map((e) => {
                 const isFlat = e.flat_amount != null;
-                const rate = e.rate_override ?? e.default_rate;
+                const rate = e.effective_rate ?? 0;
                 const amount = isFlat
                   ? Number(e.flat_amount)
                   : (e.duration_minutes / 60) * Number(rate);

@@ -24,7 +24,7 @@ const UNBILLED_ENTRIES_QUERY = `
   query($client_id: Int, $unbilled: Boolean) {
     timeEntries(client_id: $client_id, unbilled: $unbilled) {
       id project_id project_name description start_time end_time
-      duration_minutes rate_override default_rate flat_amount
+      duration_minutes rate_override default_rate effective_rate flat_amount
     }
   }
 `;
@@ -33,7 +33,7 @@ const BILLED_ENTRIES_QUERY = `
   query($client_id: Int, $billed: Boolean) {
     timeEntries(client_id: $client_id, billed: $billed) {
       id project_id project_name description start_time end_time
-      duration_minutes rate_override default_rate flat_amount
+      duration_minutes rate_override default_rate effective_rate flat_amount
     }
   }
 `;
@@ -166,7 +166,7 @@ export default function CreateInvoicePage() {
 
   function entryAmount(e: TimeEntry): number {
     if (e.flat_amount != null) return Number(e.flat_amount);
-    const rate = e.rate_override ?? e.default_rate;
+    const rate = e.effective_rate ?? 0;
     return (e.duration_minutes / 60) * Number(rate);
   }
 
@@ -279,7 +279,7 @@ export default function CreateInvoicePage() {
                 <tbody>
                   {unbilledEntries.map((e) => {
                     const isFlat = e.flat_amount != null;
-                    const rate = e.rate_override ?? e.default_rate;
+                    const rate = e.effective_rate ?? 0;
                     const hours = isFlat ? 0 : e.duration_minutes / 60;
                     const amount = entryAmount(e);
                     const action = entryActions.get(e.id);
@@ -348,7 +348,7 @@ export default function CreateInvoicePage() {
                 <tbody>
                   {billedEntries.map((e) => {
                     const isFlat = e.flat_amount != null;
-                    const rate = e.rate_override ?? e.default_rate;
+                    const rate = e.effective_rate ?? 0;
                     const hours = isFlat ? 0 : e.duration_minutes / 60;
                     const amount = entryAmount(e);
                     return (

@@ -133,12 +133,47 @@ function requireAdmin(context: Context) {
   return user;
 }
 
+async function getUserDefaultRate(userId: number): Promise<number> {
+  const row = await db('user_settings').where('user_id', userId).select('default_rate').first();
+  const v = Number(row?.default_rate);
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+const userDefaultRateByContext = new WeakMap<Context, Promise<number>>();
+function getUserDefaultRateForContext(context: Context): Promise<number> {
+  if (!context.user) return Promise.resolve(0);
+  let p = userDefaultRateByContext.get(context);
+  if (!p) {
+    p = getUserDefaultRate(context.user.id);
+    userDefaultRateByContext.set(context, p);
+  }
+  return p;
+}
+
+function effectiveRate(
+  rate_override: number | null | undefined,
+  project_default: number | null | undefined,
+  user_default: number
+): number {
+  if (rate_override != null) return Number(rate_override);
+  const p = Number(project_default || 0);
+  if (p > 0) return p;
+  return user_default;
+}
+
 export const resolvers = {
   TimeEntry: {
     start_time: (e: any) => toISO(e.start_time),
     end_time: (e: any) => toISO(e.end_time),
     created_at: (e: any) => toISO(e.created_at),
     updated_at: (e: any) => toISO(e.updated_at),
+    effective_rate: async (e: any, _: any, context: Context) => {
+      if (e.flat_amount != null) return null;
+      if (e.rate_override != null) return Number(e.rate_override);
+      const projectRate = Number(e.default_rate || 0);
+      if (projectRate > 0) return projectRate;
+      return await getUserDefaultRateForContext(context);
+    },
   },
   Invoice: {
     issue_date: (e: any) => toISO(e.issue_date),
@@ -305,6 +340,7 @@ export const resolvers = {
         .join('projects', 'time_entries.project_id', 'projects.id')
         .join('clients', 'projects.client_id', 'clients.id')
         .select('time_entries.*', 'projects.name as project_name', db.raw("COALESCE(clients.name, clients.company) as client_name"));
+      const userDefaultRate = await getUserDefaultRate(user.id);
       const unbilledHourly = await db('time_entries')
         .where('time_entries.user_id', user.id)
         .whereNull('invoice_id')
@@ -314,7 +350,10 @@ export const resolvers = {
         .join('projects', 'time_entries.project_id', 'projects.id')
         .select(
           db.raw('SUM(time_entries.duration_minutes) as total_minutes'),
-          db.raw('SUM(time_entries.duration_minutes / 60.0 * COALESCE(time_entries.rate_override, projects.default_rate)) as total_amount')
+          db.raw(
+            'SUM(time_entries.duration_minutes / 60.0 * COALESCE(time_entries.rate_override, NULLIF(projects.default_rate, 0), ?)) as total_amount',
+            [userDefaultRate]
+          )
         );
       const unbilledFlat = await db('time_entries')
         .where('user_id', user.id)
@@ -613,12 +652,13 @@ export const resolvers = {
           .where('time_entries.invoice_id', invoice.id)
           .where('time_entries.user_id', user.id)
           .whereNull('time_entries.flat_amount');
+        const userDefaultRate = await getUserDefaultRate(user.id);
         const groups = new Map<string, { project_name: string; date: string | null; rate: number; total_minutes: number; descriptions: string[] }>();
         for (const e of remaining) {
           const entryDate = e.start_time
             ? new Date(e.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
             : null;
-          const rate = Number(e.rate_override ?? e.default_rate);
+          const rate = effectiveRate(e.rate_override, e.default_rate, userDefaultRate);
           const key = `${e.project_id}|${entryDate ?? ''}|${rate}`;
           const existing = groups.get(key);
           if (existing) {
@@ -684,9 +724,10 @@ export const resolvers = {
       if (entry.flat_amount != null) {
         amount = parseFloat(Number(entry.flat_amount).toFixed(2));
       } else {
-        const rate = entry.rate_override ?? entry.default_rate;
+        const userDefaultRate = await getUserDefaultRate(user.id);
+        const rate = effectiveRate(entry.rate_override, entry.default_rate, userDefaultRate);
         const hours = (entry.duration_minutes || 0) / 60;
-        amount = parseFloat((hours * Number(rate)).toFixed(2));
+        amount = parseFloat((hours * rate).toFixed(2));
       }
       const [credit] = await db('credits')
         .insert({
@@ -707,6 +748,7 @@ export const resolvers = {
 
       const settings = await db('user_settings').where('user_id', user.id).first();
       const consolidate = !!settings?.consolidate_hours;
+      const userDefaultRate = Number(settings?.default_rate) > 0 ? Number(settings.default_rate) : 0;
 
       let invoice_number: string;
       if (customNumber) {
@@ -770,7 +812,7 @@ export const resolvers = {
             });
             subtotal += amount;
           } else {
-            const rate = Number(entry.rate_override ?? entry.default_rate);
+            const rate = effectiveRate(entry.rate_override, entry.default_rate, userDefaultRate);
             if (consolidate) {
               const key = `${entry.project_id}|${entryDate ?? ''}|${rate}`;
               const existing = hourlyGroups.get(key);
@@ -835,21 +877,21 @@ export const resolvers = {
           .where('time_entries.user_id', user.id);
         for (const entry of creditEntries) {
           let amount: number;
+          const isFlat = entry.flat_amount != null;
+          const resolvedRate = isFlat ? 0 : effectiveRate(entry.rate_override, entry.default_rate, userDefaultRate);
           if (entry.flat_amount != null) {
             amount = parseFloat(Number(entry.flat_amount).toFixed(2));
           } else {
-            const rate = entry.rate_override ?? entry.default_rate;
             const hours = (entry.duration_minutes || 0) / 60;
-            amount = parseFloat((hours * rate).toFixed(2));
+            amount = parseFloat((hours * resolvedRate).toFixed(2));
           }
-          const isFlat = entry.flat_amount != null;
           const fmt = (s: string) => new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', ...(isFlat ? { timeZone: 'UTC' } : {}) });
           const dateLabel = isFlat && entry.start_time && entry.end_time && entry.start_time !== entry.end_time
             ? `${fmt(entry.start_time)} – ${fmt(entry.end_time)}`
             : entry.start_time ? fmt(entry.start_time) : null;
           const creditDescPrefix = dateLabel ? `Credit: ${entry.project_name} - ${dateLabel}` : `Credit: ${entry.project_name}`;
           const creditQty = isFlat ? null : parseFloat(((entry.duration_minutes || 0) / 60).toFixed(2));
-          const creditRate = isFlat ? null : -Number(entry.rate_override ?? entry.default_rate);
+          const creditRate = isFlat ? null : -resolvedRate;
           await db('invoice_line_items').insert({
             invoice_id: invoice.id,
             description: `${creditDescPrefix}${entry.description ? '\n' + entry.description : ''}`,
