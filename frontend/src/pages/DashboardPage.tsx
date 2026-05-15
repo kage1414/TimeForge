@@ -27,7 +27,7 @@ const DASHBOARD_QUERY = `
     dashboard {
       total_clients
       active_projects
-      running_timers { id project_id project_name client_name description start_time default_rate rate_override }
+      running_timers { id project_id project_name client_name description start_time default_rate effective_rate rate_override }
       unbilled_hours
       unbilled_amount
       recent_invoices { id invoice_number client_name total status }
@@ -176,7 +176,7 @@ export default function DashboardPage() {
                   {timer.start_time && (
                     <ElapsedTime
                       startTime={timer.start_time}
-                      rate={timer.rate_override ?? timer.default_rate}
+                      rate={timer.effective_rate ?? 0}
                       showEarnings={userSettings?.show_earnings_on_timer}
                     />
                   )}

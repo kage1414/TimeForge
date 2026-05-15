@@ -35,6 +35,7 @@ export const typeDefs = `#graphql
     client_name: String
     client_id: Int
     default_rate: Float
+    effective_rate: Float
     description: String
     start_time: String
     end_time: String
@@ -140,6 +141,7 @@ export const typeDefs = `#graphql
     show_earnings_on_timer: Boolean
     resume_window_minutes: Int
     consolidate_hours: Boolean
+    default_rate: Float
     updated_at: String!
   }
 
@@ -170,6 +172,7 @@ export const typeDefs = `#graphql
     show_earnings_on_timer: Boolean
     resume_window_minutes: Int
     consolidate_hours: Boolean
+    default_rate: Float
   }
 
   type User {

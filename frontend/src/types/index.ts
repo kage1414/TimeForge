@@ -34,6 +34,7 @@ export interface TimeEntry {
   client_name: string;
   client_id: number;
   default_rate: number;
+  effective_rate: number | null;
   description: string;
   start_time: string | null;
   end_time: string | null;
@@ -129,6 +130,7 @@ export interface UserSettings {
   show_earnings_on_timer: boolean;
   resume_window_minutes: number;
   consolidate_hours: boolean;
+  default_rate: number | null;
   updated_at: string;
 }
 

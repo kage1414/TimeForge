@@ -87,8 +87,12 @@ Full-stack invoicing and time-tracking application.
 - **invoices**: id, client_id, invoice_number, status (draft/sent/paid/overdue/cancelled), issue_date, due_date, subtotal, tax_rate, tax_amount, credits_applied, total, notes, `export_status` ('pending' | 'generating' | 'ready' | 'failed'), `export_error`, `export_generated_at`
 - **invoice_line_items**: id, invoice_id, description, quantity, rate, amount, time_entry_id
 - **credits**: id, client_id, amount, remaining_amount, description, source_invoice_id, applied_invoice_id
-- **user_settings**: id (single row, id=1), first_name, last_name, email, address1, address2, city, state, phone, venmo, cashapp, paypal, zelle, show_earnings_on_timer, resume_window_minutes (default 60), consolidate_hours (default false — when true, invoice creation merges same-day time entries per project+rate into one line item)
+- **user_settings**: id (single row, id=1), first_name, last_name, email, address1, address2, city, state, phone, venmo, cashapp, paypal, zelle, show_earnings_on_timer, resume_window_minutes (default 60), consolidate_hours (default false — when true, invoice creation merges same-day time entries per project+rate into one line item), default_rate (nullable decimal — user-level fallback hourly rate; pre-fills the new-project form on ProjectsPage and is used as the final rate fallback in amount calcs when both `time_entries.rate_override` and `projects.default_rate` are null/0)
 - **invoices** stores a `consolidate_hours` boolean snapshot captured from user settings at creation time; unbillTimeEntry rebuilds consolidated line items (time_entry_id=NULL) when invoice was created with consolidation on
+
+### Rate resolution
+
+Hourly time-entry amount = `hours × effectiveRate`. The fallback chain is `rate_override → projects.default_rate (if > 0) → user_settings.default_rate (if > 0) → 0`. The `effectiveRate(rate_override, project_default, user_default)` helper at the top of `backend/src/graphql/resolvers.ts` is the single source of truth for the JS code paths (creditTimeEntry, createInvoice hourly + credit branches, unbillTimeEntry consolidate rebuild); the SQL dashboard aggregation uses `COALESCE(time_entries.rate_override, NULLIF(projects.default_rate, 0), ?)` with the user's default rate bound at query time. Flat-amount entries are unaffected — always use `flat_amount` directly. Frontend display rates still read `rate_override ?? default_rate` against the project's own rate; consider adding an `effective_rate` GraphQL field if UI display drift becomes a problem.
 
 ## Key Commands
 
