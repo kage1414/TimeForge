@@ -387,8 +387,6 @@ export default function InvoiceDetailPage() {
     setShowSendModal(true);
   }
 
-  console.log(invoice);
-
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
