@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { gql } from "../api/client";
 import { Invoice, UserSettings } from "../types";
 import { statusTone } from "../lib/statusTone";
+import { ocrCheckImage } from "../lib/checkOcr";
 import {
   TFBadge,
   TFButton,
@@ -94,8 +95,45 @@ function PaymentModal({
   const [checkAmount, setCheckAmount] = useState<string>(
     Number(total).toFixed(2),
   );
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const scanInputRef = useRef<HTMLInputElement | null>(null);
 
   const isCheck = selected === "Check";
+
+  async function handleScan(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setScanning(true);
+    setScanProgress(0);
+    try {
+      const result = await ocrCheckImage(file, (p) => setScanProgress(p));
+      if (result.check_number) setCheckNumber(result.check_number);
+      if (result.check_date) setCheckDate(result.check_date);
+      if (result.check_issuer) setCheckIssuer(result.check_issuer);
+      if (result.check_receiver) setCheckReceiver(result.check_receiver);
+      if (result.check_amount != null)
+        setCheckAmount(result.check_amount.toFixed(2));
+      const filled = [
+        result.check_number,
+        result.check_date,
+        result.check_issuer,
+        result.check_receiver,
+        result.check_amount,
+      ].filter((v) => v != null && v !== "").length;
+      if (filled === 0) {
+        toast.error("No check fields detected. Try a clearer photo.");
+      } else {
+        toast.success(`Detected ${filled} field${filled === 1 ? "" : "s"} — please review.`);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to scan check photo");
+    } finally {
+      setScanning(false);
+      setScanProgress(0);
+    }
+  }
 
   function handleConfirm() {
     if (isCheck) {
@@ -141,7 +179,34 @@ function PaymentModal({
           </TFRadioGroup>
           {isCheck && (
             <div className="mt-4 space-y-3">
-              <p className="text-xs text-gray-500">All fields optional.</p>
+              <div className="flex items-center gap-3">
+                <TFButton
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={scanning}
+                  onClick={() => scanInputRef.current?.click()}
+                >
+                  {scanning ? "Scanning…" : "Scan check photo"}
+                </TFButton>
+                <input
+                  ref={scanInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleScan}
+                  className="hidden"
+                />
+                {scanning && (
+                  <span className="text-xs text-gray-500">
+                    {Math.round(scanProgress * 100)}%
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">
+                All fields optional. OCR results are best-effort — please review before
+                confirming.
+              </p>
               <TFField label="Check Number">
                 <TFInput
                   value={checkNumber}
