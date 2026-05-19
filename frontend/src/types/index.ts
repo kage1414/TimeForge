@@ -60,7 +60,7 @@ export interface Invoice {
   client_zip?: string;
   client_default_email_template?: string | null;
   invoice_number: string;
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  status: "draft" | "sent" | "paid" | "overdue" | "cancelled";
   issue_date: string;
   due_date: string;
   subtotal: number;
@@ -70,8 +70,14 @@ export interface Invoice {
   total: number;
   notes: string;
   payment_method?: string | null;
+  check_number?: string | null;
+  check_date?: string | null;
+  check_issuer?: string | null;
+  check_receiver?: string | null;
+  check_amount?: number | null;
+  consolidate_hours?: boolean;
   consolidated: boolean;
-  export_status: 'pending' | 'generating' | 'ready' | 'failed';
+  export_status: "pending" | "generating" | "ready" | "failed";
   export_error?: string | null;
   export_generated_at?: string | null;
   line_items?: LineItem[];
@@ -137,7 +143,7 @@ export interface User {
   id: number;
   email: string;
   name: string | null;
-  role: 'user' | 'admin';
+  role: "user" | "admin";
   created_at: string;
 }
 

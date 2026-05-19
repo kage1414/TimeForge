@@ -94,6 +94,12 @@ export const typeDefs = `#graphql
     notes: String
     payment_method: String
     consolidated: Boolean!
+    check_number: String
+    check_date: String
+    check_issuer: String
+    check_receiver: String
+    check_amount: Float
+    consolidate_hours: Boolean!
     export_status: String!
     export_error: String
     export_generated_at: String
@@ -412,6 +418,14 @@ export const typeDefs = `#graphql
     consolidated: Boolean
   }
 
+  input CheckPaymentInput {
+    check_number: String
+    check_date: String
+    check_issuer: String
+    check_receiver: String
+    check_amount: Float
+  }
+
   input CreateCreditInput {
     client_id: Int!
     amount: Float!
@@ -440,7 +454,7 @@ export const typeDefs = `#graphql
     unbillTimeEntry(id: Int!): TimeEntry!
     creditTimeEntry(id: Int!): Credit!
     createInvoice(input: CreateInvoiceInput!): Invoice!
-    updateInvoiceStatus(id: Int!, status: String!, payment_method: String): Invoice!
+    updateInvoiceStatus(id: Int!, status: String!, payment_method: String, check: CheckPaymentInput): Invoice!
     deleteInvoice(id: Int!): Boolean!
     createCredit(input: CreateCreditInput!): Credit!
     deleteCredit(id: Int!): Boolean!
