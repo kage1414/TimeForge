@@ -9,7 +9,7 @@ import TimeEntriesPage from "./pages/TimeEntriesPage";
 import InvoicesPage from "./pages/InvoicesPage";
 import InvoiceDetailPage from "./pages/InvoiceDetailPage";
 import CreateInvoicePage from "./pages/CreateInvoicePage";
-import SettingsPage from "./pages/SettingsPage";
+import SettingsPage from "./pages/SettingsPage/SettingsPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import ImportPage from "./pages/ImportPage";
@@ -99,24 +99,54 @@ function SidebarAccordion({
 
 function HamburgerIcon() {
   return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+    <svg
+      className="w-5 h-5"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 6h16M4 12h16M4 18h16"
+      />
     </svg>
   );
 }
 
 function ChevronLeftIcon() {
   return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 19l-7-7 7-7"
+      />
     </svg>
   );
 }
 
 function ChevronRightIcon() {
   return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+    <svg
+      className="w-4 h-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 5l7 7-7 7"
+      />
     </svg>
   );
 }
@@ -205,11 +235,15 @@ export default function App() {
         `}
       >
         {/* Sidebar header */}
-        <div className={`px-4 py-4 border-b flex items-center ${collapsed ? "md:justify-center" : "justify-between"}`}>
+        <div
+          className={`px-4 py-4 border-b flex items-center ${collapsed ? "md:justify-center" : "justify-between"}`}
+        >
           {!collapsed && (
             <Link to="/" className="flex items-center space-x-2 min-w-0">
               <img src="/logo.png" alt="TimeForge" className="h-8 shrink-0" />
-              <span className="text-xl font-bold text-indigo-600 truncate">TimeForge</span>
+              <span className="text-xl font-bold text-indigo-600 truncate">
+                TimeForge
+              </span>
             </Link>
           )}
           <button

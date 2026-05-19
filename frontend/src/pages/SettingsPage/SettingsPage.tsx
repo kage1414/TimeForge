@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { gql } from "../api/client";
-import { UserSettings, User } from "../types";
-import { useAuth } from "../auth/AuthContext";
-import { statusTone } from "../lib/statusTone";
-import BackupSettings from "../components/BackupSettings";
+import { gql } from "../../api/client";
+import { UserSettings, User } from "../../types";
+import { useAuth } from "../../auth/AuthContext";
+import { statusTone } from "../../lib/statusTone";
+import BackupSettings from "../../components/BackupSettings";
 import {
   TFBadge,
   TFButton,
@@ -24,7 +24,8 @@ import {
   TFTh,
   TFTHead,
   TFTr,
-} from "../components/tf";
+} from "../../components/tf";
+import Profile from "./Profile/Profile";
 
 const SECTION_TITLES: Record<string, string> = {
   profile: "Profile",
@@ -164,8 +165,7 @@ export default function SettingsPage() {
           resume_window_minutes: resumeWindowMinutes
             ? Math.max(1, Math.floor(Number(resumeWindowMinutes)))
             : 60,
-          default_rate:
-            defaultRate.trim() === "" ? null : Number(defaultRate),
+          default_rate: defaultRate.trim() === "" ? null : Number(defaultRate),
         },
       }),
     onSuccess: () => {
@@ -255,72 +255,7 @@ export default function SettingsPage() {
           className="space-y-6"
         >
           {section === "profile" && (
-            <TFCard>
-              <TFCardTitle className="mb-4">Personal Details</TFCardTitle>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <TFField label="Company" className="md:col-span-2">
-                  <TFInput
-                    value={company}
-                    onChange={(e) => setCompany(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="First Name">
-                  <TFInput
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="Last Name">
-                  <TFInput
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="Email">
-                  <TFInput
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="Phone">
-                  <TFInput
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="Address Line 1">
-                  <TFInput
-                    value={address1}
-                    onChange={(e) => setAddress1(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="Address Line 2">
-                  <TFInput
-                    value={address2}
-                    onChange={(e) => setAddress2(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="City">
-                  <TFInput
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="State">
-                  <TFInput
-                    value={state}
-                    onChange={(e) => setState(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="Zip">
-                  <TFInput
-                    value={zip}
-                    onChange={(e) => setZip(e.target.value)}
-                  />
-                </TFField>
-              </div>
-            </TFCard>
+            <Profile company={company} setCompany={setCompany} />
           )}
 
           {section === "payment" && (
@@ -361,94 +296,94 @@ export default function SettingsPage() {
 
           {section === "preferences" && (
             <div className="space-y-6">
-            <TFCard>
-              <TFCardTitle className="mb-4">Display</TFCardTitle>
-              <TFCheckbox
-                id="show-earnings"
-                label="Show dollar amount on running timers"
-                description="Display live earnings next to the elapsed time counter based on the project rate."
-                checked={showEarningsOnTimer}
-                onChange={(e) => setShowEarningsOnTimer(e.target.checked)}
-              />
-            </TFCard>
-
-            <TFCard>
-              <TFCardTitle className="mb-4">Timer</TFCardTitle>
-              <TFField
-                label="Resume Window (minutes)"
-                hint="How long after a time entry ends you can still resume it. Default: 60 minutes."
-                className="md:max-w-xs"
-              >
-                <TFInput
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={resumeWindowMinutes}
-                  onChange={(e) => setResumeWindowMinutes(e.target.value)}
+              <TFCard>
+                <TFCardTitle className="mb-4">Display</TFCardTitle>
+                <TFCheckbox
+                  id="show-earnings"
+                  label="Show dollar amount on running timers"
+                  description="Display live earnings next to the elapsed time counter based on the project rate."
+                  checked={showEarningsOnTimer}
+                  onChange={(e) => setShowEarningsOnTimer(e.target.checked)}
                 />
-              </TFField>
-            </TFCard>
+              </TFCard>
 
-            <TFCard>
-              <TFCardTitle className="mb-4">Invoice Defaults</TFCardTitle>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TFCard>
+                <TFCardTitle className="mb-4">Timer</TFCardTitle>
                 <TFField
-                  label="Default Due In (days)"
-                  hint='Set to 0 for "Upon Receipt"'
+                  label="Resume Window (minutes)"
+                  hint="How long after a time entry ends you can still resume it. Default: 60 minutes."
+                  className="md:max-w-xs"
                 >
                   <TFInput
                     type="number"
-                    min="0"
-                    value={defaultDueDays}
-                    onChange={(e) => setDefaultDueDays(e.target.value)}
+                    min="1"
+                    step="1"
+                    value={resumeWindowMinutes}
+                    onChange={(e) => setResumeWindowMinutes(e.target.value)}
                   />
                 </TFField>
-                <TFField
-                  label="Default Hourly Rate"
-                  hint="Pre-fills new projects and acts as a fallback when a project's rate is 0. Leave blank to disable."
-                >
-                  <TFInput
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="e.g. 85.00"
-                    value={defaultRate}
-                    onChange={(e) => setDefaultRate(e.target.value)}
-                  />
-                </TFField>
-              </div>
-              <div className="mt-4">
-                <TFField
-                  label="Default Email Template"
-                  hint={
-                    <>
-                      Available variables:
-                      <br />
-                      {"{{client_name}}"}
-                      <br />
-                      {"{{client_first_name}}"}
-                      <br />
-                      {"{{client_last_name}}"}
-                      <br />
-                      {"{{invoice_number}}"}
-                      <br />
-                      {"{{total}}"}
-                      <br />
-                      {"{{due_date}}"}
-                      <br />
-                      {"{{your_name}}"}
-                    </>
-                  }
-                >
-                  <TFTextarea
-                    className="h-40 font-mono"
-                    value={emailTemplate}
-                    onChange={(e) => setEmailTemplate(e.target.value)}
-                    placeholder={`Hi {{client_name}},\n\nPlease find attached invoice #{{invoice_number}} for \${{total}}.\n\nPayment is due {{due_date}}.\n\nThank you for your business!\n\n{{your_name}}`}
-                  />
-                </TFField>
-              </div>
-            </TFCard>
+              </TFCard>
+
+              <TFCard>
+                <TFCardTitle className="mb-4">Invoice Defaults</TFCardTitle>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <TFField
+                    label="Default Due In (days)"
+                    hint='Set to 0 for "Upon Receipt"'
+                  >
+                    <TFInput
+                      type="number"
+                      min="0"
+                      value={defaultDueDays}
+                      onChange={(e) => setDefaultDueDays(e.target.value)}
+                    />
+                  </TFField>
+                  <TFField
+                    label="Default Hourly Rate"
+                    hint="Pre-fills new projects and acts as a fallback when a project's rate is 0. Leave blank to disable."
+                  >
+                    <TFInput
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 85.00"
+                      value={defaultRate}
+                      onChange={(e) => setDefaultRate(e.target.value)}
+                    />
+                  </TFField>
+                </div>
+                <div className="mt-4">
+                  <TFField
+                    label="Default Email Template"
+                    hint={
+                      <>
+                        Available variables:
+                        <br />
+                        {"{{client_name}}"}
+                        <br />
+                        {"{{client_first_name}}"}
+                        <br />
+                        {"{{client_last_name}}"}
+                        <br />
+                        {"{{invoice_number}}"}
+                        <br />
+                        {"{{total}}"}
+                        <br />
+                        {"{{due_date}}"}
+                        <br />
+                        {"{{your_name}}"}
+                      </>
+                    }
+                  >
+                    <TFTextarea
+                      className="h-40 font-mono"
+                      value={emailTemplate}
+                      onChange={(e) => setEmailTemplate(e.target.value)}
+                      placeholder={`Hi {{client_name}},\n\nPlease find attached invoice #{{invoice_number}} for \${{total}}.\n\nPayment is due {{due_date}}.\n\nThank you for your business!\n\n{{your_name}}`}
+                    />
+                  </TFField>
+                </div>
+              </TFCard>
             </div>
           )}
 
@@ -545,98 +480,98 @@ export default function SettingsPage() {
       {section === "backups" && <BackupSettings />}
 
       {section === "password" && (
-          <form onSubmit={handleChangePassword}>
-            <TFCard>
-              <TFCardTitle className="mb-4">Change Password</TFCardTitle>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <TFField label="Current Password" required>
-                  <TFInput
-                    type="password"
-                    required
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                  />
-                </TFField>
-                <TFField
-                  label="New Password"
+        <form onSubmit={handleChangePassword}>
+          <TFCard>
+            <TFCardTitle className="mb-4">Change Password</TFCardTitle>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <TFField label="Current Password" required>
+                <TFInput
+                  type="password"
                   required
-                  hint="Minimum 8 characters"
-                >
-                  <TFInput
-                    type="password"
-                    required
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
-                </TFField>
-                <TFField label="Confirm New Password" required>
-                  <TFInput
-                    type="password"
-                    required
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  />
-                </TFField>
-              </div>
-              <TFButton type="submit" size="lg" className="mt-4">
-                Change Password
-              </TFButton>
-            </TFCard>
-          </form>
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                />
+              </TFField>
+              <TFField
+                label="New Password"
+                required
+                hint="Minimum 8 characters"
+              >
+                <TFInput
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </TFField>
+              <TFField label="Confirm New Password" required>
+                <TFInput
+                  type="password"
+                  required
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                />
+              </TFField>
+            </div>
+            <TFButton type="submit" size="lg" className="mt-4">
+              Change Password
+            </TFButton>
+          </TFCard>
+        </form>
       )}
 
       {section === "users" && isAdmin && (
-          <TFCard padding="none">
-              <div className="px-4 pt-4">
-                <TFCardTitle className="mb-4">User Permissions</TFCardTitle>
-              </div>
-              <TFTable>
-                <TFTHead>
-                  <TFTr>
-                    <TFTh>Email</TFTh>
-                    <TFTh>Name</TFTh>
-                    <TFTh>Role</TFTh>
-                    <TFTh>Joined</TFTh>
-                    <TFTh>Actions</TFTh>
-                  </TFTr>
-                </TFTHead>
-                <TFTBody>
-                  {users.map((u) => (
-                    <TFTr key={u.id}>
-                      <TFTd>{u.email}</TFTd>
-                      <TFTd>{u.name || "-"}</TFTd>
-                      <TFTd>
-                        <TFBadge tone={statusTone(u.role)}>{u.role}</TFBadge>
-                      </TFTd>
-                      <TFTd>{new Date(u.created_at).toLocaleDateString()}</TFTd>
-                      <TFTd>
-                        <TFSelect
-                          size="sm"
-                          className="max-w-[120px]"
-                          value={u.role}
-                          onChange={(e) =>
-                            updateRole.mutate({
-                              id: u.id,
-                              role: e.target.value,
-                            })
-                          }
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                        </TFSelect>
-                      </TFTd>
-                    </TFTr>
-                  ))}
-                  {users.length === 0 && (
-                    <TFTr>
-                      <TFTd colSpan={5}>
-                        <TFEmpty>No users</TFEmpty>
-                      </TFTd>
-                    </TFTr>
-                  )}
-                </TFTBody>
-              </TFTable>
-            </TFCard>
+        <TFCard padding="none">
+          <div className="px-4 pt-4">
+            <TFCardTitle className="mb-4">User Permissions</TFCardTitle>
+          </div>
+          <TFTable>
+            <TFTHead>
+              <TFTr>
+                <TFTh>Email</TFTh>
+                <TFTh>Name</TFTh>
+                <TFTh>Role</TFTh>
+                <TFTh>Joined</TFTh>
+                <TFTh>Actions</TFTh>
+              </TFTr>
+            </TFTHead>
+            <TFTBody>
+              {users.map((u) => (
+                <TFTr key={u.id}>
+                  <TFTd>{u.email}</TFTd>
+                  <TFTd>{u.name || "-"}</TFTd>
+                  <TFTd>
+                    <TFBadge tone={statusTone(u.role)}>{u.role}</TFBadge>
+                  </TFTd>
+                  <TFTd>{new Date(u.created_at).toLocaleDateString()}</TFTd>
+                  <TFTd>
+                    <TFSelect
+                      size="sm"
+                      className="max-w-[120px]"
+                      value={u.role}
+                      onChange={(e) =>
+                        updateRole.mutate({
+                          id: u.id,
+                          role: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </TFSelect>
+                  </TFTd>
+                </TFTr>
+              ))}
+              {users.length === 0 && (
+                <TFTr>
+                  <TFTd colSpan={5}>
+                    <TFEmpty>No users</TFEmpty>
+                  </TFTd>
+                </TFTr>
+              )}
+            </TFTBody>
+          </TFTable>
+        </TFCard>
       )}
     </div>
   );
