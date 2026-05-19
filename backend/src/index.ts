@@ -3,6 +3,7 @@ import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import fs from "fs";
 import path from "path";
 import { ApolloServer } from "@apollo/server";
 import { expressMiddleware } from "@apollo/server/express4";
@@ -140,16 +141,36 @@ async function start() {
   try {
     // Fix any knex_migrations entries whose extension doesn't match the current runtime.
     // Compiled JS: rewrite .ts → .js. Dev (tsx): rewrite .js → .ts.
+    const migrationsDir = path.resolve(__dirname, "db/migrations");
+    const expectedExt = isCompiled ? ".js" : ".ts";
     await db.schema.hasTable("knex_migrations").then(async (exists) => {
-      if (exists) {
-        if (isCompiled) {
-          await db("knex_migrations")
-            .whereRaw("name LIKE '%.ts'")
-            .update({ name: db.raw("REPLACE(name, '.ts', '.js')") });
-        } else {
-          await db("knex_migrations")
-            .whereRaw("name LIKE '%.js'")
-            .update({ name: db.raw("REPLACE(name, '.js', '.ts')") });
+      if (!exists) return;
+      if (isCompiled) {
+        await db("knex_migrations")
+          .whereRaw("name LIKE '%.ts'")
+          .update({ name: db.raw("REPLACE(name, '.ts', '.js')") });
+      } else {
+        await db("knex_migrations")
+          .whereRaw("name LIKE '%.js'")
+          .update({ name: db.raw("REPLACE(name, '.js', '.ts')") });
+      }
+      // Drop knex_migrations rows that reference files no longer on disk — happens
+      // when a branch that introduced its own migrations gets deleted/reset while
+      // the DB volume persists. Without this, knex's strict validation refuses to
+      // run any further migrations.
+      if (fs.existsSync(migrationsDir)) {
+        const onDisk = new Set(
+          fs.readdirSync(migrationsDir).filter((f) => f.endsWith(expectedExt)),
+        );
+        const recorded = await db("knex_migrations").select("name");
+        const orphans = recorded
+          .map((r) => r.name as string)
+          .filter((n) => !onDisk.has(n));
+        if (orphans.length > 0) {
+          console.warn(
+            `Dropping ${orphans.length} orphan knex_migrations row(s): ${orphans.join(", ")}`,
+          );
+          await db("knex_migrations").whereIn("name", orphans).del();
         }
       }
     });

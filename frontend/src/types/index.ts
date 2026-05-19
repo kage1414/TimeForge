@@ -70,6 +70,11 @@ export interface Invoice {
   total: number;
   notes: string;
   payment_method?: string | null;
+  check_number?: string | null;
+  check_date?: string | null;
+  check_issuer?: string | null;
+  check_receiver?: string | null;
+  check_amount?: number | null;
   consolidate_hours?: boolean;
   export_status: 'pending' | 'generating' | 'ready' | 'failed';
   export_error?: string | null;

@@ -923,10 +923,38 @@ export const resolvers = {
       return updated;
     },
 
-    updateInvoiceStatus: async (_: any, { id, status, payment_method }: { id: number; status: string; payment_method?: string }, context: Context) => {
+    updateInvoiceStatus: async (
+      _: any,
+      {
+        id,
+        status,
+        payment_method,
+        check,
+      }: {
+        id: number;
+        status: string;
+        payment_method?: string;
+        check?: {
+          check_number?: string | null;
+          check_date?: string | null;
+          check_issuer?: string | null;
+          check_receiver?: string | null;
+          check_amount?: number | null;
+        } | null;
+      },
+      context: Context,
+    ) => {
       const user = requireAuth(context);
       const updateData: Record<string, any> = { status, updated_at: db.fn.now() };
       if (payment_method !== undefined) updateData.payment_method = payment_method;
+      if (check !== undefined) {
+        const c = check ?? {};
+        updateData.check_number = c.check_number ?? null;
+        updateData.check_date = c.check_date ?? null;
+        updateData.check_issuer = c.check_issuer ?? null;
+        updateData.check_receiver = c.check_receiver ?? null;
+        updateData.check_amount = c.check_amount ?? null;
+      }
       const [invoice] = await db('invoices')
         .where({ id, user_id: user.id })
         .update(updateData)
