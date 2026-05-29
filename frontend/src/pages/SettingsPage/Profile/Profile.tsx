@@ -1,3 +1,4 @@
+import { Dispatch, SetStateAction } from "react";
 import { TFCard, TFCardTitle, TFField, TFInput } from "../../../components/tf";
 
 const SECTION_TITLES: Record<string, string> = {
@@ -30,25 +31,25 @@ const UPDATE_SETTINGS_MUTATION = `
 const USERS_QUERY = `query { users { id email name role created_at } }`;
 
 interface ProfileProps {
-  setCompany: (company?: string) => void;
+  setCompany: Dispatch<SetStateAction<string>>;
   company?: string;
-  setFirstName: (company?: string) => void;
+  setFirstName: Dispatch<SetStateAction<string>>;
   firstName?: string;
-  setLastName: (company?: string) => void;
+  setLastName: Dispatch<SetStateAction<string>>;
   lastName?: string;
-  setEmail: (company?: string) => void;
+  setEmail: Dispatch<SetStateAction<string>>;
   email?: string;
-  setPhone: (company?: string) => void;
+  setPhone: Dispatch<SetStateAction<string>>;
   phone?: string;
-  setAddress1: (company?: string) => void;
+  setAddress1: Dispatch<SetStateAction<string>>;
   address1?: string;
-  setAddress2: (company?: string) => void;
+  setAddress2: Dispatch<SetStateAction<string>>;
   address2?: string;
-  setCity: (company?: string) => void;
+  setCity: Dispatch<SetStateAction<string>>;
   city?: string;
-  setState: (company?: string) => void;
+  setState: Dispatch<SetStateAction<string>>;
   state?: string;
-  setZip: (company?: string) => void;
+  setZip: Dispatch<SetStateAction<string>>;
   zip?: string;
 }
 
